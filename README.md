@@ -1,4 +1,4 @@
-Default text selection API in Jetpack Compose is pretty bad because everything is hidden away from you and all the necessary classes/interfaces are made internal for some unknown reason.
+Text selection API in Jetpack Compose is pretty bad because everything is hidden away from you and all the necessary classes/interfaces are made internal for some unknown reason so you can only do the bare minimum. Maybe it will be changed in the future but it's been 4 months since I suggested them to make some classes/interfaces public and they still haven't done that.
 
 There are three problems in compose text selection which are solved by this library:
 
