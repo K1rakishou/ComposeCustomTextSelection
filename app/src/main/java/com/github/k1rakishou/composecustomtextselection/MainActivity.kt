@@ -3,14 +3,24 @@ package com.github.k1rakishou.composecustomtextselection
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
+import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.dp
 import com.github.k1rakishou.composecustomtextselection.lib.SelectableText
 import com.github.k1rakishou.composecustomtextselection.lib.SelectionState
+import com.github.k1rakishou.composecustomtextselection.lib.textSelectionAfterDoubleTap
 import com.github.k1rakishou.composecustomtextselection.ui.theme.ComposeCustomTextSelectionTheme
 
 
@@ -44,9 +54,33 @@ private val text = """
 
 @Composable
 fun Content() {
+  Column(modifier = Modifier.fillMaxSize()) {
+    CustomSelectableText()
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    SelectionContainer(
+      modifier = Modifier
+        .height(300.dp)
+        .background(Color.Green.copy(alpha = 0.3f)),
+    ) {
+      Text(text = text)
+    }
+  }
+}
+
+@Composable
+private fun CustomSelectableText() {
   val selectionState = remember { SelectionState() }
 
   SelectableText(
+    modifier = Modifier
+      .pointerInput(
+        key1 = Unit,
+        block = { textSelectionAfterDoubleTap(selectionState) }
+      )
+      .height(300.dp)
+      .background(Color.Red.copy(alpha = 0.3f)),
     text = text,
     selectionState = selectionState
   )

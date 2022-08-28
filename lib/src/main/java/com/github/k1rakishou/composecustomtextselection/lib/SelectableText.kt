@@ -1,6 +1,5 @@
 package com.github.k1rakishou.composecustomtextselection.lib
 
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.InternalFoundationTextApi
 import androidx.compose.foundation.text.TextDelegate
@@ -23,7 +22,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -37,8 +35,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.MutableSharedFlow
 
 @Composable
 fun SelectableText(
@@ -106,10 +102,23 @@ fun SelectableText(
     selectionRegistrar.nextSelectableId()
   }
 
-  val textState = remember { TextState(selectableId) }
+  val textState = remember(key1 = selectionRegistrar) { TextState(selectableId) }
+  var layoutCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+  var selection by remember { mutableStateOf<Selection?>(null) }
 
-  var layoutCoordinatesMut by remember { mutableStateOf<LayoutCoordinates?>(null) }
-  val layoutCoordinates = layoutCoordinatesMut
+  val textDragObserver = remember(
+    key1 = layoutCoordinates,
+    key2 = textState,
+    key3 = selectionRegistrar
+  ) {
+    CustomTextDragObserver(
+      layoutCoordinates = layoutCoordinates,
+      textState = textState,
+      selectionRegistrar = selectionRegistrar
+    )
+  }
+
+  selectionState.updateTextDragObserver(textDragObserver)
 
   DisposableEffect(
     key1 = Unit,
@@ -128,31 +137,23 @@ fun SelectableText(
     })
 
   SelectionContainer(
-    layoutCoordinates = layoutCoordinates,
-    selectionState = selectionState,
-    selectionRegistrar = selectionRegistrar
+    selection = selection,
+    selectionRegistrar = selectionRegistrar,
+    onSelectionChange = {
+      selection = it
+    },
   ) {
     val selectionBackgroundColor = LocalTextSelectionColors.current.backgroundColor
 
     Text(
       modifier = Modifier
-        .pointerInput(
-          key1 = Unit,
-          block = {
-            detectTapGestures(
-              onDoubleTap = { offset ->
-                selectionState.selectionEventFlow.tryEmit(SelectionState.SelectionEvent.Start(offset))
-              }
-            )
-          }
-        )
         .drawTextAndSelectionBehind(
           selectionBackgroundColor = selectionBackgroundColor,
           selectionRegistrar = selectionRegistrar,
           textState = textState
         )
         .onGloballyPositioned { coordinates ->
-          layoutCoordinatesMut = coordinates
+          layoutCoordinates = coordinates
           textState.layoutCoordinates = coordinates
 
           if (selectionRegistrar.hasSelection(textState.selectableId)) {
@@ -225,19 +226,31 @@ private fun Modifier.drawTextAndSelectionBehind(
     }
 }
 
+private fun outOfBoundary(textState: TextState, start: Offset, end: Offset): Boolean {
+  textState.layoutResult?.let {
+    val lastOffset = it.layoutInput.text.text.length
+    val rawStartOffset = it.getOffsetForPosition(start)
+    val rawEndOffset = it.getOffsetForPosition(end)
+
+    return rawStartOffset >= lastOffset - 1 && rawEndOffset >= lastOffset - 1 ||
+      rawStartOffset < 0 && rawEndOffset < 0
+  }
+
+  return false
+}
+
 private fun selectionIdSaver(selectionRegistrar: SelectionRegistrar?) = Saver<Long, Long>(
   save = { if (selectionRegistrar.hasSelection(it)) it else null },
   restore = { it }
 )
 
 class SelectionState {
-  val selectionEventFlow = MutableSharedFlow<SelectionEvent>(
-    extraBufferCapacity = 1,
-    onBufferOverflow = BufferOverflow.DROP_OLDEST
-  )
+  private var _textDragObserver: TextDragObserver? = null
+  val textDragObserver: TextDragObserver?
+    get() = _textDragObserver
 
-  sealed class SelectionEvent {
-    data class Start(val offset: Offset) : SelectionEvent()
+  fun updateTextDragObserver(textDragObserver: TextDragObserver) {
+    _textDragObserver = textDragObserver
   }
 }
 
@@ -264,4 +277,109 @@ private class TextState(
   /** Read in draw scopes to invalidate when layoutResult  */
   var drawScopeInvalidation by mutableStateOf(Unit, neverEqualPolicy())
     private set
+}
+
+private class CustomTextDragObserver(
+  private val layoutCoordinates: LayoutCoordinates?,
+  private val textState: TextState,
+  private val selectionRegistrar: SelectionRegistrar
+) : TextDragObserver {
+  /**
+   * The beginning position of the drag gesture. Every time a new drag gesture starts, it wil be
+   * recalculated.
+   */
+  var lastPosition = Offset.Zero
+
+  /**
+   * The total distance being dragged of the drag gesture. Every time a new drag gesture starts,
+   * it will be zeroed out.
+   */
+  var dragTotalDistance = Offset.Zero
+
+  override fun onDown(point: Offset) {
+    // no-op
+  }
+
+  override fun onUp() {
+    // no-op
+  }
+
+  override fun onStart(startPoint: Offset) {
+    layoutCoordinates?.let {
+      if (!it.isAttached) {
+        return
+      }
+
+      if (outOfBoundary(textState, startPoint, startPoint)) {
+        selectionRegistrar.notifySelectionUpdateSelectAll(
+          selectableId = textState.selectableId
+        )
+      } else {
+        selectionRegistrar.notifySelectionUpdateStart(
+          layoutCoordinates = it,
+          startPosition = startPoint,
+          adjustment = SelectionAdjustment.Word
+        )
+      }
+
+      lastPosition = startPoint
+    }
+
+    // selection never started
+    if (!selectionRegistrar.hasSelection(textState.selectableId)) {
+      return
+    }
+
+    // Zero out the total distance that being dragged.
+    dragTotalDistance = Offset.Zero
+  }
+
+  override fun onDrag(delta: Offset) {
+    layoutCoordinates?.let {
+      if (!it.isAttached) {
+        return
+      }
+
+      // selection never started, did not consume any drag
+      if (!selectionRegistrar.hasSelection(textState.selectableId)) {
+        return
+      }
+
+      dragTotalDistance += delta
+      val newPosition = lastPosition + dragTotalDistance
+
+      if (!outOfBoundary(textState, lastPosition, newPosition)) {
+        // Notice that only the end position needs to be updated here.
+        // Start position is left unchanged. This is typically important when
+        // long-press is using SelectionAdjustment.WORD or
+        // SelectionAdjustment.PARAGRAPH that updates the start handle position from
+        // the dragBeginPosition.
+        val consumed = selectionRegistrar.notifySelectionUpdate(
+          layoutCoordinates = it,
+          previousPosition = lastPosition,
+          newPosition = newPosition,
+          isStartHandle = false,
+          adjustment = SelectionAdjustment.CharacterWithWordAccelerate
+        )
+
+        if (consumed) {
+          lastPosition = newPosition
+          dragTotalDistance = Offset.Zero
+        }
+      }
+    }
+  }
+
+  override fun onStop() {
+    if (selectionRegistrar.hasSelection(textState.selectableId)) {
+      selectionRegistrar.notifySelectionUpdateEnd()
+    }
+  }
+
+  override fun onCancel() {
+    if (selectionRegistrar.hasSelection(textState.selectableId)) {
+      selectionRegistrar.notifySelectionUpdateEnd()
+    }
+  }
+
 }

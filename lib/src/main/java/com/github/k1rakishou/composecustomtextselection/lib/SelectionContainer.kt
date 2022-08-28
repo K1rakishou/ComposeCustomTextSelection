@@ -3,15 +3,9 @@ package com.github.k1rakishou.composecustomtextselection.lib
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalTextToolbar
@@ -26,80 +20,12 @@ import androidx.compose.ui.util.fastForEach
 @Composable
 internal fun SelectionContainer(
   modifier: Modifier = Modifier,
-  layoutCoordinates: LayoutCoordinates?,
-  selectionState: SelectionState,
+  selection: Selection?,
   selectionRegistrar: SelectionRegistrarImpl,
+  onSelectionChange: (Selection?) -> Unit,
   content: @Composable () -> Unit
 ) {
-  var selection by remember { mutableStateOf<Selection?>(null) }
-  val layoutCoordinatesUpdated by rememberUpdatedState(newValue = layoutCoordinates)
-
-  LaunchedEffect(
-    key1 = Unit,
-    block = {
-      selectionState.selectionEventFlow.collect { selectionEvent ->
-        val layoutCoordinatesUpdatedLocal = layoutCoordinatesUpdated
-        if (layoutCoordinatesUpdatedLocal == null) {
-          return@collect
-        }
-
-        when (selectionEvent) {
-          is SelectionState.SelectionEvent.Start -> {
-            selectionRegistrar.notifySelectionUpdateStart(
-              layoutCoordinatesUpdatedLocal,
-              selectionEvent.offset,
-              SelectionAdjustment.Word
-            )
-          }
-        }
-      }
-    })
-
-  SelectionContainer(
-    modifier = Modifier
-      .then(modifier),
-    selection = selection,
-    registrarImpl = selectionRegistrar,
-    onSelectionChange = {
-      selection = it
-    },
-    children = content
-  )
-}
-
-/**
- * Disables text selection for its direct or indirect children. To use this, simply add this
- * to wrap one or more text composables.
- *
- * @sample androidx.compose.foundation.samples.DisableSelectionSample
- */
-@Composable
-fun DisableSelection(content: @Composable () -> Unit) {
-  CompositionLocalProvider(
-    LocalSelectionRegistrar provides null,
-    content = content
-  )
-}
-
-/**
- * Selection Composable.
- *
- * The selection composable wraps composables and let them to be selectable. It paints the selection
- * area with start and end handles.
- */
-@Suppress("ComposableLambdaParameterNaming")
-@Composable
-internal fun SelectionContainer(
-  /** A [Modifier] for SelectionContainer. */
-  modifier: Modifier = Modifier,
-  /** Current Selection status.*/
-  selection: Selection?,
-  registrarImpl: SelectionRegistrarImpl,
-  /** A function containing customized behaviour when selection changes. */
-  onSelectionChange: (Selection?) -> Unit,
-  children: @Composable () -> Unit
-) {
-  val manager = remember { SelectionManager(registrarImpl) }
+  val manager = remember { SelectionManager(selectionRegistrar) }
 
   manager.hapticFeedBack = LocalHapticFeedback.current
   manager.clipboardManager = LocalClipboardManager.current
@@ -109,11 +35,11 @@ internal fun SelectionContainer(
   manager.touchMode = true
 
   ContextMenuArea(manager) {
-    CompositionLocalProvider(LocalSelectionRegistrar provides registrarImpl) {
+    CompositionLocalProvider(LocalSelectionRegistrar provides selectionRegistrar) {
       // Get the layout coordinates of the selection container. This is for hit test of
       // cross-composable selection.
       SimpleLayout(modifier = modifier.then(manager.modifier)) {
-        children()
+        content()
         if (manager.hasFocus) {
           manager.selection?.let {
             listOf(true, false).fastForEach { isStartHandle ->
