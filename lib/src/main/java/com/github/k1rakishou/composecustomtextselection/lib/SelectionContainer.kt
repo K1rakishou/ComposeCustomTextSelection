@@ -8,7 +8,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.util.fastForEach
 
 
@@ -22,6 +21,7 @@ internal fun SelectionContainer(
   modifier: Modifier = Modifier,
   selection: Selection?,
   selectionRegistrar: SelectionRegistrarImpl,
+  configurableTextToolbar: ConfigurableTextToolbar,
   onSelectionChange: (Selection?) -> Unit,
   content: @Composable () -> Unit
 ) {
@@ -29,7 +29,7 @@ internal fun SelectionContainer(
 
   manager.hapticFeedBack = LocalHapticFeedback.current
   manager.clipboardManager = LocalClipboardManager.current
-  manager.textToolbar = LocalTextToolbar.current
+  manager.textToolbar = configurableTextToolbar
   manager.onSelectionChange = onSelectionChange
   manager.selection = selection
   manager.touchMode = true

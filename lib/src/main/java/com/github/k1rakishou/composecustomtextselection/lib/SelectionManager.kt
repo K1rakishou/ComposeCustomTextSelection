@@ -96,9 +96,9 @@ internal class SelectionManager(private val selectionRegistrar: SelectionRegistr
   var clipboardManager: ClipboardManager? = null
 
   /**
-   * [TextToolbar] to show floating toolbar(post-M) or primary toolbar(pre-M).
+   * [ConfigurableTextToolbar] to show floating toolbar(post-M) or primary toolbar(pre-M).
    */
-  var textToolbar: TextToolbar? = null
+  var textToolbar: ConfigurableTextToolbar? = null
 
   /**
    * Focus requester used to request focus when selection becomes active.
@@ -408,20 +408,22 @@ internal class SelectionManager(private val selectionRegistrar: SelectionRegistr
   internal fun showSelectionToolbar() {
     if (hasFocus) {
       selection?.let {
-        textToolbar?.showMenu(
-          getContentRect(),
-          onCopyRequested = {
-            copy()
-            onRelease()
-          }
-        )
+        textToolbar?.let { toolbar ->
+          toolbar.updateSelectedTextCallback { getSelectedText() }
+          toolbar.updateHideSelectionToolbarCallback { onRelease() }
+          toolbar.showMenu(getContentRect())
+        }
       }
     }
   }
 
   internal fun hideSelectionToolbar() {
     if (hasFocus && textToolbar?.status == TextToolbarStatus.Shown) {
-      textToolbar?.hide()
+      textToolbar?.let { toolbar ->
+        toolbar.updateSelectedTextCallback(null)
+        toolbar.updateHideSelectionToolbarCallback(null)
+        toolbar.hide()
+      }
     }
   }
 

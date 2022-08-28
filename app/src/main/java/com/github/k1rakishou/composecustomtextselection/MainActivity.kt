@@ -17,9 +17,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import com.github.k1rakishou.composecustomtextselection.lib.ConfigurableTextToolbar
 import com.github.k1rakishou.composecustomtextselection.lib.SelectableText
-import com.github.k1rakishou.composecustomtextselection.lib.SelectionState
+import com.github.k1rakishou.composecustomtextselection.lib.SelectionToolbarMenu
+import com.github.k1rakishou.composecustomtextselection.lib.rememberSelectionState
 import com.github.k1rakishou.composecustomtextselection.lib.textSelectionAfterDoubleTap
 import com.github.k1rakishou.composecustomtextselection.ui.theme.ComposeCustomTextSelectionTheme
 
@@ -71,7 +74,20 @@ fun Content() {
 
 @Composable
 private fun CustomSelectableText() {
-  val selectionState = remember { SelectionState() }
+  val view = LocalView.current
+  val selectionState = rememberSelectionState()
+  val configurableTextToolbar = remember {
+    val selectionToolbarMenu = SelectionToolbarMenu(
+      items = listOf(
+        SelectionToolbarMenu.Item(1, 0, "Custom copy") { selectedText -> println("TTTAAA selected text: ${selectedText.text}") }
+      )
+    )
+
+    return@remember ConfigurableTextToolbar(
+      view = view,
+      selectionToolbarMenu = selectionToolbarMenu
+    )
+  }
 
   SelectableText(
     modifier = Modifier
@@ -82,6 +98,7 @@ private fun CustomSelectableText() {
       .height(300.dp)
       .background(Color.Red.copy(alpha = 0.3f)),
     text = text,
-    selectionState = selectionState
+    selectionState = selectionState,
+    configurableTextToolbar = configurableTextToolbar
   )
 }

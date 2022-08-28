@@ -41,6 +41,7 @@ fun SelectableText(
   modifier: Modifier = Modifier,
   text: String,
   selectionState: SelectionState,
+  configurableTextToolbar: ConfigurableTextToolbar,
   color: Color = Color.Unspecified,
   fontSize: TextUnit = TextUnit.Unspecified,
   fontStyle: FontStyle? = null,
@@ -60,6 +61,7 @@ fun SelectableText(
     modifier = modifier,
     text = remember(key1 = text) { AnnotatedString(text) },
     selectionState = selectionState,
+    configurableTextToolbar = configurableTextToolbar,
     color = color,
     fontSize = fontSize,
     fontStyle = fontStyle,
@@ -82,6 +84,7 @@ fun SelectableText(
   modifier: Modifier = Modifier,
   text: AnnotatedString,
   selectionState: SelectionState,
+  configurableTextToolbar: ConfigurableTextToolbar,
   color: Color = Color.Unspecified,
   fontSize: TextUnit = TextUnit.Unspecified,
   fontStyle: FontStyle? = null,
@@ -139,6 +142,7 @@ fun SelectableText(
   SelectionContainer(
     selection = selection,
     selectionRegistrar = selectionRegistrar,
+    configurableTextToolbar = configurableTextToolbar,
     onSelectionChange = {
       selection = it
     },
@@ -252,6 +256,11 @@ class SelectionState {
   fun updateTextDragObserver(textDragObserver: TextDragObserver) {
     _textDragObserver = textDragObserver
   }
+}
+
+@Composable
+fun rememberSelectionState(): SelectionState {
+  return remember { SelectionState() }
 }
 
 private class TextState(
