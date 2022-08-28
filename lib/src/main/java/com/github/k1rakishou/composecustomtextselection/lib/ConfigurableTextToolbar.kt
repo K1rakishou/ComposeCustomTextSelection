@@ -42,7 +42,7 @@ class ConfigurableTextToolbar(
       actionMode = if (Build.VERSION.SDK_INT >= 23) {
         TextToolbarHelperMethods.startActionMode(
           view,
-          ConfigurablePrimaryTextActionModeCallback(textActionModeCallback),
+          ConfigurableFloatingTextActionModeCallback(textActionModeCallback),
           ActionMode.TYPE_FLOATING
         )
       } else {
@@ -109,6 +109,7 @@ class SelectionToolbarMenu(
 
 }
 
+
 internal class ConfigurablePrimaryTextActionModeCallback(
   private val callback: ConfigurableTextActionModeCallback
 ) : ActionMode.Callback {
@@ -127,6 +128,42 @@ internal class ConfigurablePrimaryTextActionModeCallback(
   override fun onDestroyActionMode(mode: ActionMode?) {
     callback.onDestroyActionMode()
   }
+}
+
+@RequiresApi(23)
+internal class ConfigurableFloatingTextActionModeCallback(
+  private val callback: ConfigurableTextActionModeCallback
+) : ActionMode.Callback2() {
+  override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
+    return callback.onActionItemClicked(mode, item)
+  }
+
+  override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
+    return callback.onCreateActionMode(mode, menu)
+  }
+
+  override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
+    return callback.onPrepareActionMode(mode, menu)
+  }
+
+  override fun onDestroyActionMode(mode: ActionMode?) {
+    callback.onDestroyActionMode()
+  }
+
+  override fun onGetContentRect(
+    mode: ActionMode?,
+    view: View?,
+    outRect: android.graphics.Rect?
+  ) {
+    val rect = callback.rect
+    outRect?.set(
+      rect.left.toInt(),
+      rect.top.toInt(),
+      rect.right.toInt(),
+      rect.bottom.toInt()
+    )
+  }
+
 }
 
 class ConfigurableTextActionModeCallback(
