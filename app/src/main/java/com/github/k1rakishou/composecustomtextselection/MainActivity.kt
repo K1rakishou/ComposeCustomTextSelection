@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
@@ -62,13 +64,7 @@ fun Content() {
 
     Spacer(modifier = Modifier.height(8.dp))
 
-    SelectionContainer(
-      modifier = Modifier
-        .height(300.dp)
-        .background(Color.Green.copy(alpha = 0.3f)),
-    ) {
-      Text(text = text)
-    }
+    AndroidSelectableText()
   }
 }
 
@@ -79,7 +75,7 @@ private fun CustomSelectableText() {
   val configurableTextToolbar = remember {
     val selectionToolbarMenu = SelectionToolbarMenu(
       items = listOf(
-        SelectionToolbarMenu.Item(1, 0, "Custom copy") { selectedText -> println("TTTAAA selected text: ${selectedText.text}") }
+        SelectionToolbarMenu.Item(1, 0, "Custom copy") { selectedText -> println("selected text: ${selectedText.text}") }
       )
     )
 
@@ -96,9 +92,22 @@ private fun CustomSelectableText() {
         block = { textSelectionAfterDoubleTap(selectionState) }
       )
       .height(300.dp)
+      .verticalScroll(rememberScrollState())
       .background(Color.Red.copy(alpha = 0.3f)),
     text = text,
     selectionState = selectionState,
     configurableTextToolbar = configurableTextToolbar
   )
+}
+
+@Composable
+private fun AndroidSelectableText() {
+  SelectionContainer(
+    modifier = Modifier
+      .height(300.dp)
+      .verticalScroll(rememberScrollState())
+      .background(Color.Green.copy(alpha = 0.3f)),
+  ) {
+    Text(text = text)
+  }
 }

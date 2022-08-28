@@ -140,6 +140,7 @@ fun SelectableText(
     })
 
   SelectionContainer(
+    modifier = modifier,
     selection = selection,
     selectionRegistrar = selectionRegistrar,
     configurableTextToolbar = configurableTextToolbar,
@@ -168,8 +169,7 @@ fun SelectableText(
 
             textState.previousGlobalPosition = newGlobalPosition
           }
-        }
-        .then(modifier),
+        },
       text = text,
       color = color,
       fontSize = fontSize,
