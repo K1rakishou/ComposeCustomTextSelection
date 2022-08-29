@@ -1,6 +1,7 @@
 package com.github.k1rakishou.composecustomtextselection
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -19,8 +20,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.github.k1rakishou.composecustomtextselection.lib.ConfigurableTextToolbar
 import com.github.k1rakishou.composecustomtextselection.lib.SelectableText
 import com.github.k1rakishou.composecustomtextselection.lib.SelectionToolbarMenu
@@ -60,10 +63,12 @@ private val text = """
 @Composable
 fun Content() {
   Column(modifier = Modifier.fillMaxSize()) {
+    Text(text = "CustomSelectableText", fontSize = 16.sp)
     CustomSelectableText()
 
     Spacer(modifier = Modifier.height(8.dp))
 
+    Text(text = "AndroidSelectableText", fontSize = 16.sp)
     AndroidSelectableText()
   }
 }
@@ -71,11 +76,16 @@ fun Content() {
 @Composable
 private fun CustomSelectableText() {
   val view = LocalView.current
+  val context = LocalContext.current
+
   val selectionState = rememberSelectionState()
   val configurableTextToolbar = remember {
     val selectionToolbarMenu = SelectionToolbarMenu(
       items = listOf(
-        SelectionToolbarMenu.Item(1, 0, "Custom copy") { selectedText -> println("selected text: ${selectedText.text}") }
+        SelectionToolbarMenu.Item(1, 0, "Custom copy") { selectedText ->
+          println("selected text: ${selectedText.text}")
+          Toast.makeText(context, selectedText.text, Toast.LENGTH_LONG).show()
+        }
       )
     )
 
