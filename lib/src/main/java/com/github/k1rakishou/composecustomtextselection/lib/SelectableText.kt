@@ -4,8 +4,6 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.InternalFoundationTextApi
 import androidx.compose.foundation.text.TextDelegate
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
-import androidx.compose.material.LocalTextStyle
-import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
@@ -25,17 +23,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.ResolvedTextDirection
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.TextUnit
 
 private val DefaultSelectionHandleContentFunc = @Composable { position: Offset,
                                                               isStartHandle: Boolean,
@@ -52,74 +41,15 @@ private val DefaultSelectionHandleContentFunc = @Composable { position: Offset,
 }
 
 @Composable
-fun SelectableText(
+fun SelectableTextContainer(
   modifier: Modifier = Modifier,
-  text: String,
   selectionState: SelectionState,
   configurableTextToolbar: ConfigurableTextToolbar,
   selectionHandleContent: @Composable ((Offset, Boolean, ResolvedTextDirection, Boolean, Modifier) -> Unit) = DefaultSelectionHandleContentFunc,
-  color: Color = Color.Unspecified,
-  fontSize: TextUnit = TextUnit.Unspecified,
-  fontStyle: FontStyle? = null,
-  fontWeight: FontWeight? = null,
-  fontFamily: FontFamily? = null,
-  letterSpacing: TextUnit = TextUnit.Unspecified,
-  textDecoration: TextDecoration? = null,
-  textAlign: TextAlign? = null,
-  lineHeight: TextUnit = TextUnit.Unspecified,
-  overflow: TextOverflow = TextOverflow.Clip,
-  softWrap: Boolean = true,
-  maxLines: Int = Int.MAX_VALUE,
-  onTextLayout: (TextLayoutResult) -> Unit = {},
-  style: TextStyle = LocalTextStyle.current
-) {
-  SelectableText(
-    modifier = modifier,
-    text = remember(key1 = text) { AnnotatedString(text) },
-    selectionState = selectionState,
-    configurableTextToolbar = configurableTextToolbar,
-    selectionHandleContent = selectionHandleContent,
-    color = color,
-    fontSize = fontSize,
-    fontStyle = fontStyle,
-    fontWeight = fontWeight,
-    fontFamily = fontFamily,
-    letterSpacing = letterSpacing,
-    textDecoration = textDecoration,
-    textAlign = textAlign,
-    lineHeight = lineHeight,
-    overflow = overflow,
-    softWrap = softWrap,
-    maxLines = maxLines,
-    onTextLayout = onTextLayout,
-    style = style,
-  )
-}
-
-@Composable
-fun SelectableText(
-  modifier: Modifier = Modifier,
-  text: AnnotatedString,
-  selectionState: SelectionState,
-  configurableTextToolbar: ConfigurableTextToolbar,
-  selectionHandleContent: @Composable ((Offset, Boolean, ResolvedTextDirection, Boolean, Modifier) -> Unit) = DefaultSelectionHandleContentFunc,
-  color: Color = Color.Unspecified,
-  fontSize: TextUnit = TextUnit.Unspecified,
-  fontStyle: FontStyle? = null,
-  fontWeight: FontWeight? = null,
-  fontFamily: FontFamily? = null,
-  letterSpacing: TextUnit = TextUnit.Unspecified,
-  textDecoration: TextDecoration? = null,
-  textAlign: TextAlign? = null,
-  lineHeight: TextUnit = TextUnit.Unspecified,
-  overflow: TextOverflow = TextOverflow.Clip,
-  softWrap: Boolean = true,
-  maxLines: Int = Int.MAX_VALUE,
-  onTextLayout: (TextLayoutResult) -> Unit = {},
-  style: TextStyle = LocalTextStyle.current
+  textContent: @Composable (modifier: Modifier, onTextLayout: (TextLayoutResult) -> Unit) -> Unit
 ) {
   val selectionRegistrar = remember { SelectionRegistrarImpl() }
-  val selectableId = rememberSaveable(text, selectionRegistrar, saver = selectionIdSaver(selectionRegistrar)) {
+  val selectableId = rememberSaveable(selectionRegistrar, saver = selectionIdSaver(selectionRegistrar)) {
     selectionRegistrar.nextSelectableId()
   }
 
@@ -169,7 +99,7 @@ fun SelectableText(
   ) {
     val selectionBackgroundColor = LocalTextSelectionColors.current.backgroundColor
 
-    Text(
+    textContent(
       modifier = Modifier
         .drawTextAndSelectionBehind(
           selectionBackgroundColor = selectionBackgroundColor,
@@ -189,24 +119,9 @@ fun SelectableText(
             textState.previousGlobalPosition = newGlobalPosition
           }
         },
-      text = text,
-      color = color,
-      fontSize = fontSize,
-      fontStyle = fontStyle,
-      fontWeight = fontWeight,
-      fontFamily = fontFamily,
-      letterSpacing = letterSpacing,
-      textDecoration = textDecoration,
-      textAlign = textAlign,
-      lineHeight = lineHeight,
-      overflow = overflow,
-      softWrap = softWrap,
-      maxLines = maxLines,
       onTextLayout = { textLayoutResult ->
         textState.layoutResult = textLayoutResult
-        onTextLayout(textLayoutResult)
-      },
-      style = style
+      }
     )
   }
 }

@@ -28,7 +28,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.github.k1rakishou.composecustomtextselection.lib.ConfigurableTextToolbar
-import com.github.k1rakishou.composecustomtextselection.lib.SelectableText
+import com.github.k1rakishou.composecustomtextselection.lib.SelectableTextContainer
 import com.github.k1rakishou.composecustomtextselection.lib.SelectionToolbarMenu
 import com.github.k1rakishou.composecustomtextselection.lib.rememberSelectionState
 import com.github.k1rakishou.composecustomtextselection.lib.textSelectionAfterDoubleTapOrTapWithLongTap
@@ -108,7 +108,7 @@ private fun CustomSelectableText(
     )
   }
 
-  SelectableText(
+  SelectableTextContainer(
     modifier = Modifier
       .height(300.dp)
       .verticalScroll(rememberScrollState())
@@ -117,9 +117,17 @@ private fun CustomSelectableText(
         key1 = Unit,
         block = { textSelectionAfterDoubleTapOrTapWithLongTap(selectionState) }
       ),
-    text = text,
     selectionState = selectionState,
-    configurableTextToolbar = configurableTextToolbar
+    configurableTextToolbar = configurableTextToolbar,
+    textContent = { modifier, onTextLayout ->
+      Text(
+        modifier = modifier,
+        text = text,
+        onTextLayout = { textLayoutResult ->
+          onTextLayout(textLayoutResult)
+        }
+      )
+    }
   )
 }
 
