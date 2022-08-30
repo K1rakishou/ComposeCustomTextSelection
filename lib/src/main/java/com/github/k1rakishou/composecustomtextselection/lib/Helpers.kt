@@ -97,7 +97,7 @@ suspend fun PointerInputScope.textSelectionAfterDoubleTapOrTapWithLongTap(
 }
 
 suspend fun AwaitPointerEventScope.detectDoubleTapOrTapWithLongTap(): PointerInputChange? {
-  awaitFirstDown()
+  val firstDown = awaitFirstDown()
 
   val firstLongPressTimeout = Long.MAX_VALUE / 2
   var upOrCancel: PointerInputChange? = null
@@ -119,6 +119,10 @@ suspend fun AwaitPointerEventScope.detectDoubleTapOrTapWithLongTap(): PointerInp
   if (secondDown == null) {
     return null
   }
+
+  upOrCancel.consume()
+  firstDown.consume()
+  secondDown.consume()
 
   val secondLongPressTimeout = viewConfiguration.longPressTimeoutMillis
   var lastPointerInputChange: PointerInputChange? = secondDown
