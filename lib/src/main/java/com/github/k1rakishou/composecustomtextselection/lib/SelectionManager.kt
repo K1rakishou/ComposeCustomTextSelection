@@ -740,12 +740,12 @@ internal class SelectionManager(private val selectionRegistrar: SelectionRegistr
   ): Boolean {
     draggingHandle = if (isStartHandle) Handle.SelectionStart else Handle.SelectionEnd
     currentDragPosition = if (isStartHandle) startHandlePosition else endHandlePosition
+
     val newSubselections = mutableMapOf<Long, Selection>()
     var moveConsumed = false
     val newSelection = selectionRegistrar.sort(requireContainerCoordinates())
       .fold(null) { mergedSelection: Selection?, selectable: Selectable ->
-        val previousSubselection =
-          selectionRegistrar.subselections[selectable.selectableId]
+        val previousSubselection = selectionRegistrar.subselections[selectable.selectableId]
         val (selection, consumed) = selectable.updateSelection(
           startHandlePosition = startHandlePosition,
           endHandlePosition = endHandlePosition,
@@ -760,6 +760,7 @@ internal class SelectionManager(private val selectionRegistrar: SelectionRegistr
         selection?.let { newSubselections[selectable.selectableId] = it }
         merge(mergedSelection, selection)
       }
+
     if (newSelection != selection) {
       hapticFeedBack?.performHapticFeedback(HapticFeedbackType.TextHandleMove)
       selectionRegistrar.subselections = newSubselections

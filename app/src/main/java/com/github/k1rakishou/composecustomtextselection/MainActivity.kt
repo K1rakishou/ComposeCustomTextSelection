@@ -31,7 +31,7 @@ import com.github.k1rakishou.composecustomtextselection.lib.ConfigurableTextTool
 import com.github.k1rakishou.composecustomtextselection.lib.SelectableText
 import com.github.k1rakishou.composecustomtextselection.lib.SelectionToolbarMenu
 import com.github.k1rakishou.composecustomtextselection.lib.rememberSelectionState
-import com.github.k1rakishou.composecustomtextselection.lib.textSelectionAfterDoubleTap
+import com.github.k1rakishou.composecustomtextselection.lib.textSelectionAfterDoubleTapOrTapWithLongTap
 import com.github.k1rakishou.composecustomtextselection.ui.theme.ComposeCustomTextSelectionTheme
 
 
@@ -90,6 +90,7 @@ private fun CustomSelectableText(
 ) {
   val view = LocalView.current
   val selectionState = rememberSelectionState()
+
   val copySelectedTextUpdated by rememberUpdatedState(newValue = copySelectedText)
 
   val configurableTextToolbar = remember {
@@ -109,13 +110,13 @@ private fun CustomSelectableText(
 
   SelectableText(
     modifier = Modifier
-      .pointerInput(
-        key1 = Unit,
-        block = { textSelectionAfterDoubleTap(selectionState) }
-      )
       .height(300.dp)
       .verticalScroll(rememberScrollState())
-      .background(Color.Red.copy(alpha = 0.3f)),
+      .background(Color.Red.copy(alpha = 0.3f))
+      .pointerInput(
+        key1 = Unit,
+        block = { textSelectionAfterDoubleTapOrTapWithLongTap(selectionState) }
+      ),
     text = text,
     selectionState = selectionState,
     configurableTextToolbar = configurableTextToolbar
