@@ -1,5 +1,6 @@
 package com.github.k1rakishou.composecustomtextselection.lib
 
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.view.ActionMode
 import android.view.Menu
@@ -82,8 +83,15 @@ class SelectionToolbarMenu(
     }
 
     items.forEach { item ->
-      menu.add(0, item.id, item.order, item.text)
-        .setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+      val menuItem = menu.add(0, item.id, item.order, item.text)
+
+      with(menuItem) {
+        if (item.icon != null) {
+          setIcon(item.icon)
+        }
+
+        setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+      }
     }
 
     return true
@@ -104,6 +112,7 @@ class SelectionToolbarMenu(
     val id: Int,
     val order: Int,
     val text: CharSequence,
+    val icon: Drawable? = null,
     val callback: (AnnotatedString) -> Unit
   )
 
