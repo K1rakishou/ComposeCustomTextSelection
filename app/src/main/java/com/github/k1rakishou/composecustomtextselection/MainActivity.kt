@@ -119,6 +119,8 @@ private fun CustomSelectableText(
       ),
     selectionState = selectionState,
     configurableTextToolbar = configurableTextToolbar,
+    onEnteredSelection = { println("onEnteredSelection") },
+    onExitedSelection = { println("onExitedSelection") },
     textContent = { modifier, onTextLayout ->
       Text(
         modifier = modifier,

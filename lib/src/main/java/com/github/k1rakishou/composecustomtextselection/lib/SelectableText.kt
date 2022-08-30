@@ -45,6 +45,8 @@ fun SelectableTextContainer(
   modifier: Modifier = Modifier,
   selectionState: SelectionState,
   configurableTextToolbar: ConfigurableTextToolbar,
+  onEnteredSelection: (() -> Unit)? = null,
+  onExitedSelection: (() -> Unit)? = null,
   selectionHandleContent: @Composable ((Offset, Boolean, ResolvedTextDirection, Boolean, Modifier) -> Unit) = DefaultSelectionHandleContentFunc,
   textContent: @Composable (modifier: Modifier, onTextLayout: (TextLayoutResult) -> Unit) -> Unit
 ) {
@@ -55,6 +57,8 @@ fun SelectableTextContainer(
 
   val textState = remember(key1 = selectionRegistrar) { TextState(selectableId) }
   var layoutCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+  var isInSelectionMode by remember { mutableStateOf(false) }
   var selection by remember { mutableStateOf<Selection?>(null) }
 
   val textDragObserver = remember(
@@ -92,8 +96,18 @@ fun SelectableTextContainer(
     selection = selection,
     selectionRegistrar = selectionRegistrar,
     configurableTextToolbar = configurableTextToolbar,
-    onSelectionChange = {
-      selection = it
+    onSelectionChange = { newSelection ->
+      val wasInSelectionMode = isInSelectionMode
+      val nowInSelectionMode = newSelection != null
+
+      if (!wasInSelectionMode && nowInSelectionMode) {
+        onEnteredSelection?.invoke()
+      } else if (wasInSelectionMode && !nowInSelectionMode) {
+        onExitedSelection?.invoke()
+      }
+
+      isInSelectionMode = nowInSelectionMode
+      selection = newSelection
     },
     selectionHandleContent = selectionHandleContent
   ) {
@@ -186,6 +200,10 @@ class SelectionState {
   private var _textDragObserver: TextDragObserver? = null
   val textDragObserver: TextDragObserver?
     get() = _textDragObserver
+
+  fun stopSelection() {
+    textDragObserver?.onStop()
+  }
 
   fun updateTextDragObserver(textDragObserver: TextDragObserver) {
     _textDragObserver = textDragObserver
