@@ -31,10 +31,25 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.ResolvedTextDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
+
+private val DefaultSelectionHandleContentFunc = @Composable { position: Offset,
+                                                              isStartHandle: Boolean,
+                                                              direction: ResolvedTextDirection,
+                                                              handlesCrossed: Boolean,
+                                                              modifier: Modifier ->
+  DefaultSelectionHandleContent(
+    position = position,
+    isStartHandle = isStartHandle,
+    direction = direction,
+    handlesCrossed = handlesCrossed,
+    modifier = modifier
+  )
+}
 
 @Composable
 fun SelectableText(
@@ -42,6 +57,7 @@ fun SelectableText(
   text: String,
   selectionState: SelectionState,
   configurableTextToolbar: ConfigurableTextToolbar,
+  selectionHandleContent: @Composable ((Offset, Boolean, ResolvedTextDirection, Boolean, Modifier) -> Unit) = DefaultSelectionHandleContentFunc,
   color: Color = Color.Unspecified,
   fontSize: TextUnit = TextUnit.Unspecified,
   fontStyle: FontStyle? = null,
@@ -62,6 +78,7 @@ fun SelectableText(
     text = remember(key1 = text) { AnnotatedString(text) },
     selectionState = selectionState,
     configurableTextToolbar = configurableTextToolbar,
+    selectionHandleContent = selectionHandleContent,
     color = color,
     fontSize = fontSize,
     fontStyle = fontStyle,
@@ -85,6 +102,7 @@ fun SelectableText(
   text: AnnotatedString,
   selectionState: SelectionState,
   configurableTextToolbar: ConfigurableTextToolbar,
+  selectionHandleContent: @Composable ((Offset, Boolean, ResolvedTextDirection, Boolean, Modifier) -> Unit) = DefaultSelectionHandleContentFunc,
   color: Color = Color.Unspecified,
   fontSize: TextUnit = TextUnit.Unspecified,
   fontStyle: FontStyle? = null,
@@ -147,6 +165,7 @@ fun SelectableText(
     onSelectionChange = {
       selection = it
     },
+    selectionHandleContent = selectionHandleContent
   ) {
     val selectionBackgroundColor = LocalTextSelectionColors.current.backgroundColor
 

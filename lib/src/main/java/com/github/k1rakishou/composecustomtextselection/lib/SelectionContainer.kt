@@ -5,9 +5,11 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.style.ResolvedTextDirection
 import androidx.compose.ui.util.fastForEach
 
 
@@ -23,6 +25,7 @@ internal fun SelectionContainer(
   selectionRegistrar: SelectionRegistrarImpl,
   configurableTextToolbar: ConfigurableTextToolbar,
   onSelectionChange: (Selection?) -> Unit,
+  selectionHandleContent: @Composable ((Offset, Boolean, ResolvedTextDirection, Boolean, Modifier) -> Unit),
   content: @Composable () -> Unit
 ) {
   val manager = remember { SelectionManager(selectionRegistrar) }
@@ -67,7 +70,7 @@ internal fun SelectionContainer(
                   modifier = Modifier.pointerInput(observer) {
                     detectDownAndDragGesturesWithObserver(observer)
                   },
-                  content = null
+                  selectionHandleContent = selectionHandleContent
                 )
               }
             }

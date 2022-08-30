@@ -16,12 +16,15 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.github.k1rakishou.composecustomtextselection.lib.ConfigurableTextToolbar
@@ -62,9 +65,17 @@ private val text = """
 
 @Composable
 fun Content() {
+  val context = LocalContext.current
+
   Column(modifier = Modifier.fillMaxSize()) {
     Text(text = "CustomSelectableText", fontSize = 16.sp)
-    CustomSelectableText()
+
+    CustomSelectableText(
+      copySelectedText = { selectedText ->
+        println("selected text: ${selectedText.text}")
+        Toast.makeText(context, selectedText.text, Toast.LENGTH_LONG).show()
+      }
+    )
 
     Spacer(modifier = Modifier.height(8.dp))
 
@@ -74,17 +85,18 @@ fun Content() {
 }
 
 @Composable
-private fun CustomSelectableText() {
+private fun CustomSelectableText(
+  copySelectedText: (AnnotatedString) -> Unit
+) {
   val view = LocalView.current
-  val context = LocalContext.current
-
   val selectionState = rememberSelectionState()
+  val copySelectedTextUpdated by rememberUpdatedState(newValue = copySelectedText)
+
   val configurableTextToolbar = remember {
     val selectionToolbarMenu = SelectionToolbarMenu(
       items = listOf(
         SelectionToolbarMenu.Item(1, 0, "Custom copy") { selectedText ->
-          println("selected text: ${selectedText.text}")
-          Toast.makeText(context, selectedText.text, Toast.LENGTH_LONG).show()
+          copySelectedTextUpdated.invoke(selectedText)
         }
       )
     )

@@ -1,12 +1,27 @@
 package com.github.k1rakishou.composecustomtextselection.lib
 
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 
-internal val HandleWidth = 25.dp
-internal val HandleHeight = 25.dp
+val TextSelectionHandleWidth = 25.dp
+val TextSelectionHandleHeight = 25.dp
+
+fun Modifier.selectionHandleSemantics(isStartHandle: Boolean, position: Offset): Modifier {
+  return this.semantics {
+    this[SelectionHandleInfoKey] = SelectionHandleInfo(
+      handle = if (isStartHandle) {
+        Handle.SelectionStart
+      } else {
+        Handle.SelectionEnd
+      },
+      position = position
+    )
+  }
+}
 
 /**
  * [SelectionHandleInfo]s for the nodes representing selection handles. These nodes are in popup

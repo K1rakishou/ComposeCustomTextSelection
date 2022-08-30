@@ -488,7 +488,7 @@ internal class SelectionManager(private val selectionRegistrar: SelectionRegistr
       endTop = localLayoutCoordinates.localToRoot(endTop)
 
       val top = min(startTop.y, endTop.y)
-      val bottom = max(startOffset.y, endOffset.y) + (HandleHeight.value * 4.0).toFloat()
+      val bottom = max(startOffset.y, endOffset.y) + (TextSelectionHandleHeight.value * 4.0).toFloat()
 
       return Rect(
         left,

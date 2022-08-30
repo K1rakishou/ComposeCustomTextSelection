@@ -19,7 +19,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ImageBitmapConfig
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.ResolvedTextDirection
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -42,7 +41,7 @@ internal fun SelectionHandle(
   direction: ResolvedTextDirection,
   handlesCrossed: Boolean,
   modifier: Modifier,
-  content: @Composable (() -> Unit)?
+  selectionHandleContent: @Composable ((Offset, Boolean, ResolvedTextDirection, Boolean, Modifier) -> Unit)
 ) {
   val isLeft = isLeft(isStartHandle, direction, handlesCrossed)
   // The left selection handle's top right is placed at the given position, and vice versa.
@@ -53,27 +52,24 @@ internal fun SelectionHandle(
   }
 
   HandlePopup(position = position, handleReferencePoint = handleReferencePoint) {
-    if (content == null) {
-      DefaultSelectionHandle(
-        modifier = modifier
-          .semantics {
-            this[SelectionHandleInfoKey] = SelectionHandleInfo(
-              handle = if (isStartHandle) {
-                Handle.SelectionStart
-              } else {
-                Handle.SelectionEnd
-              },
-              position = position
-            )
-          },
-        isStartHandle = isStartHandle,
-        direction = direction,
-        handlesCrossed = handlesCrossed
-      )
-    } else {
-      content()
-    }
+    selectionHandleContent(position, isStartHandle, direction, handlesCrossed, modifier)
   }
+}
+
+@Composable
+fun DefaultSelectionHandleContent(
+  position: Offset,
+  isStartHandle: Boolean,
+  direction: ResolvedTextDirection,
+  handlesCrossed: Boolean,
+  modifier: Modifier,
+) {
+  DefaultSelectionHandle(
+    modifier = modifier.selectionHandleSemantics(isStartHandle, position),
+    isStartHandle = isStartHandle,
+    direction = direction,
+    handlesCrossed = handlesCrossed
+  )
 }
 
 @Composable
@@ -85,7 +81,7 @@ internal fun DefaultSelectionHandle(
   handlesCrossed: Boolean
 ) {
   Spacer(
-    modifier.size(HandleWidth, HandleHeight)
+    modifier.size(TextSelectionHandleWidth, TextSelectionHandleHeight)
       .drawSelectionHandle(isStartHandle, direction, handlesCrossed)
   )
 }
@@ -261,12 +257,12 @@ internal class HandlePositionProvider(
     popupContentSize: IntSize
   ): IntOffset {
     return when (handleReferencePoint) {
-      HandleReferencePoint.TopLeft ->
+      TopLeft ->
         IntOffset(
           x = anchorBounds.left + offset.x,
           y = anchorBounds.top + offset.y
         )
-      HandleReferencePoint.TopRight ->
+      TopRight ->
         IntOffset(
           x = anchorBounds.left + offset.x - popupContentSize.width,
           y = anchorBounds.top + offset.y
