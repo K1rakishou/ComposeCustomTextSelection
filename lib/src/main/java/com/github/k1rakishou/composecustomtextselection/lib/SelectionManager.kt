@@ -10,7 +10,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.MagnifierStyle
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.forEachGesture
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.magnifier
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
@@ -35,7 +34,12 @@ import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.isOutOfBounds
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
@@ -47,6 +51,8 @@ import androidx.compose.ui.platform.TextToolbar
 import androidx.compose.ui.platform.TextToolbarStatus
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.util.fastAll
+import androidx.compose.ui.util.fastAny
 import kotlin.math.absoluteValue
 import kotlin.math.max
 import kotlin.math.min
@@ -616,10 +622,34 @@ internal class SelectionManager(private val selectionRegistrar: SelectionRegistr
     forEachGesture {
       coroutineScope {
         awaitPointerEventScope {
-          waitForUpOrCancellation()?.let {
+          waitForUpOrCancellationOnInitialPass()?.let {
             onTap(it.position)
           }
         }
+      }
+    }
+  }
+
+  private suspend fun AwaitPointerEventScope.waitForUpOrCancellationOnInitialPass(): PointerInputChange? {
+    while (true) {
+      val event = awaitPointerEvent(PointerEventPass.Initial)
+      if (event.changes.fastAll { it.changedToUp() }) {
+        // All pointers are up
+        return event.changes[0]
+      }
+
+      if (event.changes.fastAny {
+          it.isConsumed || it.isOutOfBounds(size, extendedTouchPadding)
+        }
+      ) {
+        return null // Canceled
+      }
+
+      // Check for cancel by position consumption. We can look on the Final pass of the
+      // existing pointer event because it comes after the Main pass we checked above.
+      val consumeCheck = awaitPointerEvent(PointerEventPass.Final)
+      if (consumeCheck.changes.fastAny { it.isConsumed }) {
+        return null
       }
     }
   }
