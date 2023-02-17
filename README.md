@@ -6,4 +6,4 @@ There are three problems in compose text selection which are solved by this libr
 - It's impossible to change selection cursors (only the color, but not the icons themselves). They are drawn as bitmaps so why not let us replace the bitmaps with our own implementations? (Not implemented yet).
 - You can't implement custom menu items like in Android View system (You can provide custom LocalTextToolbar but it only has 4 hardcoded menus: copy, paste, cut, select all. Can't add your own). (Not implemented yet).
 
-![Sample](sample.gif)
+[<img src="sample.gif" width=400>](sample.gif)
