@@ -1,30 +1,23 @@
 plugins {
     id 'com.android.library'
-    id 'org.jetbrains.kotlin.android'
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 group = 'com.github.k1rakishou.composecustomtextselection.lib'
 
 android {
-    compileSdk 33
+    compileSdk 37
+    namespace 'com.github.k1rakishou.composecustomtextselection.lib'
 
     defaultConfig {
-        minSdk 21
-        targetSdk 32
-        versionCode 1
-        versionName "1.0"
+        minSdk 23
+        targetSdk 37
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildFeatures {
-        compose true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion compose_version
-    }
-    kotlinOptions {
-        jvmTarget = '1.8'
+        compose = true
     }
 }
 
@@ -35,6 +28,6 @@ dependencies {
     implementation "androidx.compose.ui:ui-util:$compose_version"
 
     testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.3'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
+    androidTestImplementation 'androidx.test.ext:junit:1.3.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.7.0'
 }

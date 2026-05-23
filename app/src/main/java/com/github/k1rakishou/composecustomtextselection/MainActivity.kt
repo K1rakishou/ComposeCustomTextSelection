@@ -6,9 +6,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -17,21 +21,15 @@ import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.github.k1rakishou.composecustomtextselection.lib.ConfigurableTextToolbar
 import com.github.k1rakishou.composecustomtextselection.lib.SelectableTextContainer
-import com.github.k1rakishou.composecustomtextselection.lib.SelectionToolbarMenu
-import com.github.k1rakishou.composecustomtextselection.lib.rememberSelectionState
-import com.github.k1rakishou.composecustomtextselection.lib.textSelectionAfterDoubleTapOrTapWithLongTap
+import com.github.k1rakishou.composecustomtextselection.lib.rememberTextSelectionState
 import com.github.k1rakishou.composecustomtextselection.ui.theme.ComposeCustomTextSelectionTheme
 
 
@@ -52,35 +50,53 @@ class MainActivity : ComponentActivity() {
 }
 
 private val text = """
-    Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed non augue dapibus, imperdiet ipsum non, feugiat elit. In convallis lobortis nisl in sodales. Fusce cursus mauris at tortor porta aliquet. Quisque tincidunt arcu facilisis, sodales dui non, euismod tortor. Suspendisse sodales commodo mauris sodales fringilla. Nunc ac justo convallis enim feugiat condimentum. Quisque urna sem, semper eu tristique vel, commodo non diam.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Praesent justo nulla, dictum in ornare hendrerit, mattis nec nisi. Vestibulum consequat velit eu magna feugiat, sed porttitor ipsum bibendum. Nam vitae lectus risus. Maecenas in sem turpis. Fusce nec justo sed ante accumsan laoreet. Quisque varius est sit amet elit sagittis, id facilisis sapien tincidunt. Sed tristique maximus dolor, congue scelerisque nulla sodales eget. Sed et massa pulvinar, mollis felis in, finibus quam. Mauris augue nisi, mattis vel eleifend vel, mollis ac velit. Nulla facilisi. Aenean fringilla neque ac nisl finibus fringilla. Donec a accumsan purus. Ut eu nisl neque. Praesent imperdiet eros ac massa tempor, nec porta nibh feugiat.
 
-    Quisque cursus sapien eu malesuada facilisis. Aenean sem lorem, vestibulum vel mi id, pellentesque congue lorem. In pulvinar sollicitudin massa. Fusce a lorem finibus dui auctor imperdiet. Mauris consequat dui ac dapibus tristique. Donec augue elit, maximus ut nunc non, bibendum rhoncus tellus. Etiam molestie ut odio eget mattis. Quisque ultrices lectus nulla, mattis mattis urna mattis nec. Nulla tincidunt ornare felis vel eleifend. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum in est odio. Etiam posuere nisl metus, vitae bibendum ligula blandit et.
+Proin finibus tellus nec est euismod auctor. Suspendisse nunc dolor, ultricies vestibulum tincidunt id, hendrerit id lorem. Maecenas at mollis massa, ac ultricies odio. In dignissim nulla vel elit cursus vehicula. Morbi nulla ipsum, scelerisque id leo et, fermentum gravida ligula. Etiam sem neque, efficitur et venenatis et, maximus at sapien. Pellentesque vel arcu feugiat metus tristique rhoncus. Donec maximus eu ligula nec pharetra. Donec pellentesque, tellus vitae dictum porta, tellus arcu accumsan mauris, id ornare mauris dui sed nisi. Phasellus ultricies nec tellus at ullamcorper. Morbi ac lorem enim.
 
-    Nunc est dui, varius nec dolor ac, ultrices maximus ligula. Fusce sollicitudin non lectus vel aliquam. Maecenas porta lacinia libero ac accumsan. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Integer hendrerit tempor urna vehicula vestibulum. Aenean mollis augue sed leo pretium, eget consectetur dui pharetra. Integer eu turpis nec sem malesuada vulputate id nec nisl. Integer eu imperdiet odio.
+Suspendisse lacus nulla, convallis a blandit accumsan, pellentesque vel ante. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum a quam libero. Phasellus pulvinar vestibulum libero. Phasellus blandit ornare massa quis molestie. In enim turpis, pulvinar eu suscipit eu, ultrices id turpis. Duis ut rhoncus leo.
 
-    Vestibulum tellus lacus, mollis et ultrices ut, fermentum vitae metus. Morbi ornare odio id arcu cursus interdum. Donec tellus arcu, tincidunt id neque et, lacinia blandit ligula. Ut posuere mi quis nunc porttitor, quis condimentum elit pharetra. Aenean in ex convallis, aliquam urna vel, elementum turpis. Nulla at dapibus urna, sed tristique metus. Morbi volutpat magna vel rhoncus tempor. Phasellus at gravida urna, non mattis odio.
+Curabitur laoreet efficitur commodo. Nunc condimentum ligula ut lacus vestibulum, eu imperdiet tellus hendrerit. Nam sed magna interdum, elementum urna tincidunt, ultrices lacus. Mauris sed ultricies lectus. Donec in massa at libero feugiat elementum. Suspendisse ac neque eget lorem ornare elementum. Morbi hendrerit purus nibh, eu auctor lorem vehicula vitae. Morbi et magna ultrices, molestie arcu vitae, lacinia nibh. Curabitur nec feugiat nulla. Phasellus at lectus luctus ipsum lobortis dapibus ac sit amet velit. Sed libero neque, placerat egestas tempus et, lobortis a est. Proin rutrum, purus in vulputate vehicula, elit odio vulputate ex, ut rhoncus ligula mauris at augue.
 
-    Quisque turpis massa, ornare vel tincidunt non, viverra quis libero. Sed fringilla feugiat dolor, ac lacinia lectus interdum et. Curabitur elementum nulla at mattis tempor. Praesent sed facilisis augue, in vulputate massa. Curabitur non aliquam est. Curabitur feugiat, nisi id mattis dignissim, tortor nunc feugiat diam, sit amet congue ligula arcu vel nibh. Sed sem lorem, faucibus et cursus et, cursus eu odio. Curabitur ligula purus, aliquam ut lectus in, luctus gravida dui. Donec condimentum eleifend suscipit. Vivamus semper facilisis dolor non dapibus. Proin quis felis sed nunc porta scelerisque eu sed urna.
+Integer sit amet massa non orci accumsan molestie posuere venenatis nunc. Nulla non tempor lectus, et efficitur augue. Quisque consectetur ac ligula a convallis. Vivamus tincidunt eu massa a feugiat. Pellentesque arcu nisi, consectetur eget mi eu, dapibus interdum arcu. Sed felis urna, malesuada quis interdum vel, luctus mollis arcu. Nam id lobortis lacus. Phasellus pharetra congue leo sit amet elementum. Proin feugiat elit elit, id pulvinar nulla congue quis. Aenean eget dapibus nibh, sit amet bibendum felis. Morbi eu cursus ipsum. Duis a volutpat nisl. Quisque vulputate enim id cursus sodales. Suspendisse potenti. 
   """.trimIndent()
 
 @Composable
 fun Content() {
   val context = LocalContext.current
 
-  Column(modifier = Modifier.fillMaxSize()) {
-    Text(text = "CustomSelectableText", fontSize = 16.sp)
+  Row(
+    modifier = Modifier
+      .fillMaxSize()
+      .padding(vertical = 24.dp, horizontal = 8.dp),
+  ) {
+    Column(
+      modifier = Modifier
+        .fillMaxHeight()
+        .weight(0.5f)
+        .verticalScroll(rememberScrollState())
+    ) {
+      Text(text = "CustomSelectableText", fontSize = 16.sp)
 
-    CustomSelectableText(
-      copySelectedText = { selectedText ->
-        println("selected text: ${selectedText.text}")
-        Toast.makeText(context, selectedText.text, Toast.LENGTH_LONG).show()
-      }
-    )
+      CustomSelectableText(
+        copySelectedText = { selectedText ->
+          println("selected text: ${selectedText.text}")
+          Toast.makeText(context, selectedText.text, Toast.LENGTH_LONG).show()
+        }
+      )
+    }
 
     Spacer(modifier = Modifier.height(8.dp))
 
-    Text(text = "AndroidSelectableText", fontSize = 16.sp)
-    AndroidSelectableText()
+    Column(
+      modifier = Modifier
+        .fillMaxHeight()
+        .weight(0.5f)
+        .verticalScroll(rememberScrollState())
+    ) {
+      Text(text = "AndroidSelectableText", fontSize = 16.sp)
+      AndroidSelectableText()
+    }
   }
 }
 
@@ -88,42 +104,21 @@ fun Content() {
 private fun CustomSelectableText(
   copySelectedText: (AnnotatedString) -> Unit
 ) {
-  val view = LocalView.current
-  val selectionState = rememberSelectionState()
+  val textSelectionState = rememberTextSelectionState()
 
   val copySelectedTextUpdated by rememberUpdatedState(newValue = copySelectedText)
 
-  val configurableTextToolbar = remember {
-    val selectionToolbarMenu = SelectionToolbarMenu(
-      items = listOf(
-        SelectionToolbarMenu.Item(1, 0, "Custom copy") { selectedText ->
-          copySelectedTextUpdated.invoke(selectedText)
-        }
-      )
-    )
-
-    return@remember ConfigurableTextToolbar(
-      view = view,
-      selectionToolbarMenu = selectionToolbarMenu
-    )
-  }
-
   SelectableTextContainer(
     modifier = Modifier
-      .height(300.dp)
-      .verticalScroll(rememberScrollState())
-      .background(Color.Red.copy(alpha = 0.3f))
-      .pointerInput(
-        key1 = Unit,
-        block = { textSelectionAfterDoubleTapOrTapWithLongTap(selectionState) }
-      ),
-    selectionState = selectionState,
-    configurableTextToolbar = configurableTextToolbar,
-    onEnteredSelection = { println("onEnteredSelection") },
-    onExitedSelection = { println("onExitedSelection") },
-    textContent = { modifier, onTextLayout ->
+      .wrapContentHeight()
+      .background(Color.Red.copy(alpha = 0.3f)),
+    textSelectionState = textSelectionState,
+    onClicked = { println("TTTAAA onClicked") },
+    onLongClicked = { println("TTTAAA onLongClicked") },
+    onEnteredSelection = { println("TTTAAA onEnteredSelection") },
+    onExitedSelection = { println("TTTAAA onExitedSelection") },
+    textContent = { onTextLayout ->
       Text(
-        modifier = modifier,
         text = text,
         onTextLayout = { textLayoutResult ->
           onTextLayout(textLayoutResult)
@@ -137,8 +132,7 @@ private fun CustomSelectableText(
 private fun AndroidSelectableText() {
   SelectionContainer(
     modifier = Modifier
-      .height(300.dp)
-      .verticalScroll(rememberScrollState())
+      .wrapContentHeight()
       .background(Color.Green.copy(alpha = 0.3f)),
   ) {
     Text(text = text)
