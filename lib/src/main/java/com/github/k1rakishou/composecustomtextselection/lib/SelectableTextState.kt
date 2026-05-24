@@ -23,7 +23,7 @@ import java.text.BreakIterator
 import java.util.Locale
 
 class SelectableTextState(
-  initialSelectionColor: Color,
+  selectionColor: Color,
   private val leftPainter: Painter,
   private val rightPainter: Painter,
   val debugMode: Boolean
@@ -43,7 +43,7 @@ class SelectableTextState(
   private val _rightSelectionHandle = mutableStateOf<SelectionHandle?>(null)
   val rightSelectionHandle: State<SelectionHandle?>
     get() = _rightSelectionHandle
-  private val _selectionColor = mutableStateOf(initialSelectionColor)
+  private val _selectionColor = mutableStateOf(selectionColor)
   val selectionColor: State<Color>
     get() = _selectionColor
   private val _pointerPosition = mutableStateOf<Offset?>(null)
@@ -300,7 +300,8 @@ private fun Density.defaultSize(): Size = Size(28.dp.toPx(), 28.dp.toPx())
 
 @Composable
 fun rememberTextSelectionState(
-  initialSelectionColor: Color = Color(0xA04FCEF7L),
+  selectionColor: Color = Color(0x804FCEF7L),
+  cursorColor: Color = Color(0xFF0BB7EFL),
   size: Size = with(LocalDensity.current) { defaultSize() },
   leftSelectionHandlePainter: Painter? = null,
   rightSelectionHandlePainter: Painter? = null,
@@ -314,6 +315,7 @@ fun rememberTextSelectionState(
     return@remember DefaultSelectionHandlePainter(
       isLeftHandle = true,
       size = size,
+      color = cursorColor
     )
   }
 
@@ -325,12 +327,13 @@ fun rememberTextSelectionState(
     return@remember DefaultSelectionHandlePainter(
       isLeftHandle = false,
       size = size,
+      color = cursorColor
     )
   }
 
   return remember {
     SelectableTextState(
-      initialSelectionColor = initialSelectionColor,
+      selectionColor = selectionColor,
       leftPainter = leftPainter,
       rightPainter = rightPainter,
       debugMode = debugMode

@@ -13,15 +13,16 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.painter.Painter
 
 class DefaultSelectionHandlePainter(
-  val isLeftHandle: Boolean,
-  val size: Size
+  private val color: Color,
+  private val isLeftHandle: Boolean,
+  private val size: Size
 ) : Painter() {
   private var _cached: ImageBitmap? = null
 
   override fun DrawScope.onDraw() {
     val localCached = _cached
     if (localCached == null) {
-      _cached = defaultSelectionHandleBitmap()
+      _cached = createSelectionHandleBitmap()
     }
 
     if (isLeftHandle) {
@@ -36,7 +37,8 @@ class DefaultSelectionHandlePainter(
   override val intrinsicSize: Size
     get() = size
 
-  private fun DrawScope.defaultSelectionHandleBitmap(): ImageBitmap {
+  // Same as Compose's default selection handle (circle + rectangle on top of it).
+  private fun DrawScope.createSelectionHandleBitmap(): ImageBitmap {
     val imageBitmap = ImageBitmap(
       width = size.width.toInt(),
       height = size.height.toInt(),
@@ -50,7 +52,7 @@ class DefaultSelectionHandlePainter(
     path.addRect(Rect(size.width / 2f, 0f, size.width, size.height / 2f))
 
     val paint = Paint()
-    paint.color = Color.Blue
+    paint.color = color
     canvas.drawPath(path, paint)
 
     return imageBitmap
