@@ -3,7 +3,6 @@ package com.github.k1rakishou.composecustomtextselection.lib
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.ui.geometry.Offset
@@ -17,7 +16,6 @@ import androidx.compose.ui.input.pointer.isOutOfBounds
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastAny
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlin.concurrent.atomics.AtomicReference
@@ -28,32 +26,75 @@ internal suspend fun PointerInputScope.textSelectionAfterDoubleTapOrTapWithLongT
   onClicked: (() -> Unit)?,
   onLongClicked: (() -> Unit)?,
   interactionSource: MutableInteractionSource,
-  textSelectionState: TextSelectionState
+  selectableTextState: SelectableTextState
 ) {
   coroutineScope {
-    launch(start = CoroutineStart.UNDISPATCHED) {
-      val pressRef = AtomicReference<PressInteraction.Press?>(null)
+    launch {
+      awaitEachGesture {
+        val firstDown = awaitFirstDown()
+        if (selectableTextState.dragMode == null) {
+          return@awaitEachGesture
+        }
 
-      detectPreDragGesturesWithObserver(
-        onDown = { offset ->
-          val press = PressInteraction.Press(offset)
-          interactionSource.tryEmit(press)
-          pressRef.store(press)
+        val leftSelectionHandle = selectableTextState.leftSelectionHandle.value
+        val rightSelectionHandle = selectableTextState.rightSelectionHandle.value
 
-          textSelectionState.onPointerDown(offset)
-        },
-        onUp = {
-          pressRef.exchange(null)
-            ?.let { press -> interactionSource.tryEmit(PressInteraction.Release(press)) }
+        val leftHandleBBox = leftSelectionHandle
+          ?.leftHandleBBox()
+          ?: return@awaitEachGesture
+        val rightHandleBBox = rightSelectionHandle
+          ?.rightHandleBBox()
+          ?: return@awaitEachGesture
 
-          textSelectionState.onPointerUp()
-        },
-      )
+        val isLeftHandle = if (leftHandleBBox.contains(firstDown.position)) {
+          true
+        } else if (rightHandleBBox.contains(firstDown.position)) {
+          false
+        } else {
+          return@awaitEachGesture
+        }
+
+        selectableTextState.onDragStart(
+          startPoint = firstDown.position,
+          dragMode = DragMode.DraggingHandle(isLeftHandle = isLeftHandle),
+        )
+
+        val stoppedNormally = drag(firstDown.id) { change ->
+          selectableTextState.onDragProgress(change.positionChange())
+          change.consume()
+        }
+
+        if (stoppedNormally) {
+          // consume up if we quit drag gracefully with the up
+          currentEvent.changes.forEach { change ->
+            if (change.changedToUp()) {
+              change.consume()
+            }
+          }
+        }
+
+        selectableTextState.onDragStop(stoppedNormally = stoppedNormally)
+      }
     }
 
-    launch(start = CoroutineStart.UNDISPATCHED) {
+    launch {
       awaitEachGesture {
+        val pressRef = AtomicReference<PressInteraction.Press?>(null)
+
         val textSelectionGesture = detectTextSelectionGesture(
+          selectableTextState = selectableTextState,
+          onDown = { offset ->
+            val press = PressInteraction.Press(offset)
+            interactionSource.tryEmit(press)
+            pressRef.store(press)
+          },
+          onUp = {
+            pressRef.exchange(null)
+              ?.let { press -> interactionSource.tryEmit(PressInteraction.Release(press)) }
+          },
+          onResetSelection = {
+            selectableTextState.resetEverything()
+          },
           onClicked = onClicked,
           onLongClicked = onLongClicked
         )
@@ -61,59 +102,71 @@ internal suspend fun PointerInputScope.textSelectionAfterDoubleTapOrTapWithLongT
           return@awaitEachGesture
         }
 
-        processDragEvents(
-          textSelectionState = textSelectionState,
-          textSelectionGesture = textSelectionGesture,
+        selectableTextState.onDragStart(
+          startPoint = textSelectionGesture.position,
+          dragMode = DragMode.ExtendingSelection(
+            initialSelectionMode = textSelectionGesture.initialSelectionMode
+          ),
         )
+
+        val stoppedNormally = drag(textSelectionGesture.id) { change ->
+          selectableTextState.onDragProgress(change.positionChange())
+          change.consume()
+        }
+
+        if (stoppedNormally) {
+          // consume up if we quit drag gracefully with the up
+          currentEvent.changes.forEach { change ->
+            if (change.changedToUp()) {
+              change.consume()
+            }
+          }
+        }
+
+        selectableTextState.onDragStop(stoppedNormally = stoppedNormally)
       }
     }
   }
-}
-
-private suspend fun AwaitPointerEventScope.processDragEvents(
-  textSelectionState: TextSelectionState,
-  textSelectionGesture: TextSelectionGesture,
-) {
-  textSelectionState.onDragStart(
-    startPoint = textSelectionGesture.position,
-    initialSelectionMode = textSelectionGesture.initialSelectionMode
-  )
-
-  val stoppedNormally = drag(textSelectionGesture.id) { change ->
-    textSelectionState.onDragProgress(change.positionChange())
-    change.consume()
-  }
-
-  if (stoppedNormally) {
-    // consume up if we quit drag gracefully with the up
-    currentEvent.changes.forEach { change ->
-      if (change.changedToUp()) {
-        change.consume()
-      }
-    }
-  }
-
-  textSelectionState.onDragStop(stoppedNormally = stoppedNormally)
 }
 
 private suspend fun AwaitPointerEventScope.detectTextSelectionGesture(
+  selectableTextState: SelectableTextState,
+  onDown: (Offset) -> Unit,
+  onUp: () -> Unit,
+  onResetSelection: () -> Unit,
   onClicked: (() -> Unit)?,
   onLongClicked: (() -> Unit)?,
 ): TextSelectionGesture? {
   val firstDown = awaitFirstDown()
+  if (selectableTextState.dragMode != null) {
+    return null
+  }
+
+  onDown(firstDown.position)
 
   val longPressTimeout = viewConfiguration.longPressTimeoutMillis
   val doubleTapTimeout = viewConfiguration.doubleTapMinTimeMillis
   var upOrCancel: PointerInputChange? = null
+  var slopExceeded = false
 
-  // wait for first tap up or long press
   upOrCancel = withTimeoutOrNull(longPressTimeout) {
-    waitForUpOrCancellation()
+    waitForUpOrCancellation(
+      onTouchSlopExceeded = { slopExceeded = true }
+    )
   }
+
+  if (slopExceeded) {
+    // Scroll
+    onUp()
+    return null
+  }
+
+  onResetSelection()
 
   if (upOrCancel == null) {
     // Long tap
     onLongClicked?.invoke()
+    onUp()
     return null
   }
 
@@ -121,8 +174,11 @@ private suspend fun AwaitPointerEventScope.detectTextSelectionGesture(
   if (secondDown == null) {
     // Tap
     onClicked?.invoke()
+    onUp()
     return null
   }
+
+  onDown(secondDown.position)
 
   upOrCancel.consume()
   firstDown.consume()
@@ -139,6 +195,8 @@ private suspend fun AwaitPointerEventScope.detectTextSelectionGesture(
         }
       }
     )
+
+    onUp()
 
     if (secondUp != null) {
       secondUp.consume()
@@ -172,6 +230,7 @@ private suspend fun AwaitPointerEventScope.detectTextSelectionGesture(
 
   lastPointerInputChange = null
   doubleTap.consume()
+  onDown(secondDown.position)
 
   val trippleTap = withTimeoutOrNull(longPressTimeout) {
     val thirdUp = waitForUpOrCancellation(
@@ -182,6 +241,8 @@ private suspend fun AwaitPointerEventScope.detectTextSelectionGesture(
         }
       }
     )
+
+    onUp()
 
     if (thirdUp != null) {
       thirdUp.consume()
@@ -215,10 +276,29 @@ private suspend fun AwaitPointerEventScope.detectTextSelectionGesture(
   )
 }
 
-private suspend fun AwaitPointerEventScope.waitForUpOrCancellation(
-  minUptime: Long,
-  onNewPointerInputChange: (PointerInputChange) -> Unit
+private suspend fun AwaitPointerEventScope.awaitNextDown(
+  prevUp: PointerInputChange
 ): PointerInputChange? {
+  return withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+    val minUptime = prevUp.uptimeMillis + viewConfiguration.doubleTapMinTimeMillis
+    var change: PointerInputChange
+    // The next tap doesn't count if it happens before DoubleTapMinTime of the first tap
+    do {
+      change = awaitFirstDown()
+    } while (change.uptimeMillis < minUptime)
+    change
+  }
+}
+
+private suspend fun AwaitPointerEventScope.waitForUpOrCancellation(
+  minUptime: Long = 0,
+  onNewPointerInputChange: (PointerInputChange) -> Unit = {},
+  onTouchSlopExceeded: () -> Unit = {},
+): PointerInputChange? {
+  var touchSlopExceeded = false
+  val touchSlop = viewConfiguration.touchSlop
+  var totalDrag = Offset.Zero
+
   while (true) {
     val event = awaitPointerEvent(PointerEventPass.Main)
     if (event.changes.fastAll { it.changedToUp() }) {
@@ -234,6 +314,18 @@ private suspend fun AwaitPointerEventScope.waitForUpOrCancellation(
       return null
     }
 
+    // Track drag distance for touch slop
+    if (!touchSlopExceeded) {
+      val change = event.changes.firstOrNull()
+      if (change != null) {
+        totalDrag += change.positionChange()
+        if (totalDrag.getDistance() > touchSlop) {
+          touchSlopExceeded = true
+          onTouchSlopExceeded()
+        }
+      }
+    }
+
     val pointerInputChange = event.changes.firstOrNull()
     if (pointerInputChange != null) {
       onNewPointerInputChange(pointerInputChange)
@@ -242,40 +334,6 @@ private suspend fun AwaitPointerEventScope.waitForUpOrCancellation(
     val consumeCheck = awaitPointerEvent(PointerEventPass.Final)
     if (consumeCheck.changes.fastAny { it.isConsumed }) {
       return null
-    }
-  }
-}
-
-private suspend fun AwaitPointerEventScope.awaitNextDown(
-  prevUp: PointerInputChange
-): PointerInputChange? {
-  return withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-    val minUptime = prevUp.uptimeMillis + viewConfiguration.doubleTapMinTimeMillis
-    var change: PointerInputChange
-    // The next tap doesn't count if it happens before DoubleTapMinTime of the first tap
-    do {
-      change = awaitFirstDown()
-    } while (change.uptimeMillis < minUptime)
-    change
-  }
-}
-
-private suspend fun PointerInputScope.detectPreDragGesturesWithObserver(
-  onDown: (Offset) -> Unit,
-  onUp: () -> Unit,
-) {
-  awaitEachGesture {
-    val down = awaitFirstDown(requireUnconsumed = false)
-    onDown(down.position)
-
-    // Wait for that pointer to come up.
-
-    try {
-      do {
-        val event = awaitPointerEvent()
-      } while (event.changes.any { it.id == down.id && it.pressed })
-    } finally {
-      onUp()
     }
   }
 }

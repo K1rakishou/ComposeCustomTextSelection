@@ -4,7 +4,7 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,17 +20,25 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.github.k1rakishou.composecustomtextselection.lib.SelectableTextContainer
 import com.github.k1rakishou.composecustomtextselection.lib.rememberTextSelectionState
 import com.github.k1rakishou.composecustomtextselection.ui.theme.ComposeCustomTextSelectionTheme
+import kotlinx.coroutines.launch
 
 
 class MainActivity : ComponentActivity() {
@@ -76,7 +84,9 @@ fun Content() {
         .weight(0.5f)
         .verticalScroll(rememberScrollState())
     ) {
-      Text(text = "CustomSelectableText", fontSize = 16.sp)
+      Spacer(modifier = Modifier.height(32.dp))
+      Text(text = "CustomSelectableText", fontSize = 20.sp)
+      Spacer(modifier = Modifier.height(16.dp))
 
       CustomSelectableText(
         copySelectedText = { selectedText ->
@@ -94,7 +104,9 @@ fun Content() {
         .weight(0.5f)
         .verticalScroll(rememberScrollState())
     ) {
-      Text(text = "AndroidSelectableText", fontSize = 16.sp)
+      Spacer(modifier = Modifier.height(32.dp))
+      Text(text = "AndroidSelectableText", fontSize = 20.sp)
+      Spacer(modifier = Modifier.height(16.dp))
       AndroidSelectableText()
     }
   }
@@ -104,19 +116,51 @@ fun Content() {
 private fun CustomSelectableText(
   copySelectedText: (AnnotatedString) -> Unit
 ) {
-  val textSelectionState = rememberTextSelectionState()
+  val density = LocalDensity.current
+  val lifecycleOwner = LocalLifecycleOwner.current
 
+  val spritesheetBitmap = ImageBitmap.imageResource(id = R.drawable.cursor_spritesheet)
+  val leftHandlePainter = remember {
+    AnimatedSelectionHandlePainter(
+      isLeftHandle = true,
+      bitmap = spritesheetBitmap,
+      frameCount = 10,
+      frameSize = 32,
+      painterSize = with(density) { 24.dp.roundToPx() },
+      frameDurationMs = 16 * 6
+    )
+  }
+  val rightHandlePainter = remember {
+    AnimatedSelectionHandlePainter(
+      isLeftHandle = false,
+      bitmap = spritesheetBitmap,
+      frameCount = 10,
+      frameSize = 32,
+      painterSize = with(density) { 24.dp.roundToPx() },
+      frameDurationMs = 16 * 6
+    )
+  }
+
+  val textSelectionState = rememberTextSelectionState(
+    leftSelectionHandlePainter = leftHandlePainter,
+    rightSelectionHandlePainter = rightHandlePainter,
+    debugMode = true
+  )
   val copySelectedTextUpdated by rememberUpdatedState(newValue = copySelectedText)
+
+  LaunchedEffect(key1 = leftHandlePainter, key2 = rightHandlePainter) {
+    lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+      launch { leftHandlePainter.animate() }
+      launch { rightHandlePainter.animate() }
+    }
+  }
 
   SelectableTextContainer(
     modifier = Modifier
-      .wrapContentHeight()
-      .background(Color.Red.copy(alpha = 0.3f)),
-    textSelectionState = textSelectionState,
+      .wrapContentHeight(),
+    selectableTextState = textSelectionState,
     onClicked = { println("TTTAAA onClicked") },
     onLongClicked = { println("TTTAAA onLongClicked") },
-    onEnteredSelection = { println("TTTAAA onEnteredSelection") },
-    onExitedSelection = { println("TTTAAA onExitedSelection") },
     textContent = { onTextLayout ->
       Text(
         text = text,
@@ -133,7 +177,10 @@ private fun AndroidSelectableText() {
   SelectionContainer(
     modifier = Modifier
       .wrapContentHeight()
-      .background(Color.Green.copy(alpha = 0.3f)),
+      .combinedClickable(
+        onClick = {},
+        onLongClick = {}
+      ),
   ) {
     Text(text = text)
   }
