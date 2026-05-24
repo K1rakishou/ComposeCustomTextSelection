@@ -17,7 +17,6 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastAny
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
@@ -29,102 +28,50 @@ internal suspend fun PointerInputScope.textSelectionAfterDoubleTapOrTapWithLongT
   selectableTextState: SelectableTextState
 ) {
   coroutineScope {
-    launch {
-      awaitEachGesture {
-        val firstDown = awaitFirstDown()
-        if (selectableTextState.dragMode == null) {
-          return@awaitEachGesture
-        }
+    awaitEachGesture {
+      val pressRef = AtomicReference<PressInteraction.Press?>(null)
 
-        val leftSelectionHandle = selectableTextState.leftSelectionHandle.value
-        val rightSelectionHandle = selectableTextState.rightSelectionHandle.value
+      val textSelectionGesture = detectTextSelectionGesture(
+        selectableTextState = selectableTextState,
+        onDown = { offset ->
+          val press = PressInteraction.Press(offset)
+          interactionSource.tryEmit(press)
+          pressRef.store(press)
+        },
+        onUp = {
+          pressRef.exchange(null)
+            ?.let { press -> interactionSource.tryEmit(PressInteraction.Release(press)) }
+        },
+        onResetSelection = {
+          selectableTextState.resetEverything()
+        },
+        onClicked = onClicked,
+        onLongClicked = onLongClicked
+      )
+      if (textSelectionGesture == null) {
+        return@awaitEachGesture
+      }
 
-        val leftHandleBBox = leftSelectionHandle
-          ?.leftHandleBBox()
-          ?: return@awaitEachGesture
-        val rightHandleBBox = rightSelectionHandle
-          ?.rightHandleBBox()
-          ?: return@awaitEachGesture
+      selectableTextState.onDragStart(
+        startPoint = textSelectionGesture.position,
+        dragMode = textSelectionGesture.dragMode,
+      )
 
-        val isLeftHandle = if (leftHandleBBox.contains(firstDown.position)) {
-          true
-        } else if (rightHandleBBox.contains(firstDown.position)) {
-          false
-        } else {
-          return@awaitEachGesture
-        }
+      val stoppedNormally = drag(textSelectionGesture.id) { change ->
+        selectableTextState.onDragProgress(change.positionChange())
+        change.consume()
+      }
 
-        selectableTextState.onDragStart(
-          startPoint = firstDown.position,
-          dragMode = DragMode.DraggingHandle(isLeftHandle = isLeftHandle),
-        )
-
-        val stoppedNormally = drag(firstDown.id) { change ->
-          selectableTextState.onDragProgress(change.positionChange())
-          change.consume()
-        }
-
-        if (stoppedNormally) {
-          // consume up if we quit drag gracefully with the up
-          currentEvent.changes.forEach { change ->
-            if (change.changedToUp()) {
-              change.consume()
-            }
+      if (stoppedNormally) {
+        // consume up if we quit drag gracefully with the up
+        currentEvent.changes.forEach { change ->
+          if (change.changedToUp()) {
+            change.consume()
           }
         }
-
-        selectableTextState.onDragStop(stoppedNormally = stoppedNormally)
       }
-    }
 
-    launch {
-      awaitEachGesture {
-        val pressRef = AtomicReference<PressInteraction.Press?>(null)
-
-        val textSelectionGesture = detectTextSelectionGesture(
-          selectableTextState = selectableTextState,
-          onDown = { offset ->
-            val press = PressInteraction.Press(offset)
-            interactionSource.tryEmit(press)
-            pressRef.store(press)
-          },
-          onUp = {
-            pressRef.exchange(null)
-              ?.let { press -> interactionSource.tryEmit(PressInteraction.Release(press)) }
-          },
-          onResetSelection = {
-            selectableTextState.resetEverything()
-          },
-          onClicked = onClicked,
-          onLongClicked = onLongClicked
-        )
-        if (textSelectionGesture == null) {
-          return@awaitEachGesture
-        }
-
-        selectableTextState.onDragStart(
-          startPoint = textSelectionGesture.position,
-          dragMode = DragMode.ExtendingSelection(
-            initialSelectionMode = textSelectionGesture.initialSelectionMode
-          ),
-        )
-
-        val stoppedNormally = drag(textSelectionGesture.id) { change ->
-          selectableTextState.onDragProgress(change.positionChange())
-          change.consume()
-        }
-
-        if (stoppedNormally) {
-          // consume up if we quit drag gracefully with the up
-          currentEvent.changes.forEach { change ->
-            if (change.changedToUp()) {
-              change.consume()
-            }
-          }
-        }
-
-        selectableTextState.onDragStop(stoppedNormally = stoppedNormally)
-      }
+      selectableTextState.onDragStop(stoppedNormally = stoppedNormally)
     }
   }
 }
@@ -138,14 +85,45 @@ private suspend fun AwaitPointerEventScope.detectTextSelectionGesture(
   onLongClicked: (() -> Unit)?,
 ): TextSelectionGesture? {
   val firstDown = awaitFirstDown()
+
   if (selectableTextState.dragMode != null) {
-    return null
+    // Check if we are hitting any of the selection handle bboxes.
+    val leftSelectionHandle = selectableTextState.leftSelectionHandle.value
+    val rightSelectionHandle = selectableTextState.rightSelectionHandle.value
+
+    val leftHandleBBox = leftSelectionHandle?.leftHandleBBox()
+    val rightHandleBBox = rightSelectionHandle?.rightHandleBBox()
+
+    if (leftHandleBBox != null && rightHandleBBox != null) {
+      val isLeftHandle = if (leftHandleBBox.contains(firstDown.position)) {
+        true
+      } else if (rightHandleBBox.contains(firstDown.position)) {
+        false
+      } else {
+        null
+      }
+
+      if (isLeftHandle != null) {
+        firstDown.consume()
+
+        return TextSelectionGesture.DragSelectionHandle(
+          position = firstDown.position,
+          id = firstDown.id,
+          dragMode = DragMode.DraggingHandle(isLeftHandle = isLeftHandle)
+        )
+      }
+
+      // Fallthrough
+    }
+
+    // Fallthrough
   }
 
   onDown(firstDown.position)
 
   val longPressTimeout = viewConfiguration.longPressTimeoutMillis
   val doubleTapTimeout = viewConfiguration.doubleTapMinTimeMillis
+
   var upOrCancel: PointerInputChange? = null
   var slopExceeded = false
 
@@ -341,21 +319,27 @@ private suspend fun AwaitPointerEventScope.waitForUpOrCancellation(
 private sealed interface TextSelectionGesture {
   val position: Offset
   val id: PointerId
-  val initialSelectionMode: InitialSelectionMode
+  val dragMode: DragMode
+
+  data class DragSelectionHandle(
+    override val position: Offset,
+    override val id: PointerId,
+    override val dragMode: DragMode
+  ) : TextSelectionGesture
 
   data class SelectWord(
     override val position: Offset,
     override val id: PointerId,
   ) : TextSelectionGesture {
-    override val initialSelectionMode: InitialSelectionMode
-      get() = InitialSelectionMode.Word
+    override val dragMode: DragMode
+      get() = DragMode.ExtendingSelection(InitialSelectionMode.Word)
   }
 
   data class SelectSentence(
     override val position: Offset,
     override val id: PointerId,
   ) : TextSelectionGesture {
-    override val initialSelectionMode: InitialSelectionMode
-      get() = InitialSelectionMode.Sentence
+    override val dragMode: DragMode
+      get() = DragMode.ExtendingSelection(InitialSelectionMode.Sentence)
   }
 }
