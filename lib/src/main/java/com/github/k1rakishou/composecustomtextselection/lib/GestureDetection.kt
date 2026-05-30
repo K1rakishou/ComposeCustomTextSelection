@@ -2,6 +2,7 @@ package com.github.k1rakishou.composecustomtextselection.lib
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
@@ -19,6 +20,27 @@ import androidx.compose.ui.util.fastAny
 import kotlinx.coroutines.coroutineScope
 import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
+
+internal suspend fun PointerInputScope.textSelectionAfterHandleDrag(
+  isLeftHandle: Boolean,
+  selectionHandle: SelectionHandle,
+  selectableTextState: SelectableTextState
+) {
+  detectDragGestures(
+    onDragStart = { popupRelativeOffset ->
+      val textRelativeOffset = popupRelativeOffset.popupToLocal(selectionHandle)
+        ?: return@detectDragGestures
+
+      selectableTextState.onDragStart(
+        startPoint = textRelativeOffset,
+        dragMode = DragMode.DraggingHandle(isLeftHandle)
+      )
+    },
+    onDrag = { _, delta -> selectableTextState.onDragProgress(delta) },
+    onDragEnd = { selectableTextState.onDragStop(stoppedNormally = true) },
+    onDragCancel = { selectableTextState.onDragStop(stoppedNormally = false) }
+  )
+}
 
 @OptIn(ExperimentalAtomicApi::class)
 internal suspend fun PointerInputScope.textSelectionAfterDoubleTapOrTapWithLongTap(
@@ -85,40 +107,6 @@ private suspend fun AwaitPointerEventScope.detectTextSelectionGesture(
   onLongClicked: (() -> Unit)?,
 ): TextSelectionGesture? {
   val firstDown = awaitFirstDown()
-
-  if (selectableTextState.dragMode != null) {
-    // Check if we are hitting any of the selection handle bboxes.
-    val leftSelectionHandle = selectableTextState.leftSelectionHandle.value
-    val rightSelectionHandle = selectableTextState.rightSelectionHandle.value
-
-    val leftHandleBBox = leftSelectionHandle?.leftHandleBBox()
-    val rightHandleBBox = rightSelectionHandle?.rightHandleBBox()
-
-    if (leftHandleBBox != null && rightHandleBBox != null) {
-      val isLeftHandle = if (leftHandleBBox.contains(firstDown.position)) {
-        true
-      } else if (rightHandleBBox.contains(firstDown.position)) {
-        false
-      } else {
-        null
-      }
-
-      if (isLeftHandle != null) {
-        firstDown.consume()
-
-        return TextSelectionGesture.DragSelectionHandle(
-          position = firstDown.position,
-          id = firstDown.id,
-          dragMode = DragMode.DraggingHandle(isLeftHandle = isLeftHandle)
-        )
-      }
-
-      // Fallthrough
-    }
-
-    // Fallthrough
-  }
-
   onDown(firstDown.position)
 
   val longPressTimeout = viewConfiguration.longPressTimeoutMillis
@@ -139,7 +127,9 @@ private suspend fun AwaitPointerEventScope.detectTextSelectionGesture(
     return null
   }
 
-  onResetSelection()
+  if (selectableTextState.dragMode != null) {
+    onResetSelection()
+  }
 
   if (upOrCancel == null) {
     // Long tap
@@ -210,7 +200,7 @@ private suspend fun AwaitPointerEventScope.detectTextSelectionGesture(
   doubleTap.consume()
   onDown(secondDown.position)
 
-  val trippleTap = withTimeoutOrNull(longPressTimeout) {
+  val tripleTap = withTimeoutOrNull(longPressTimeout) {
     val thirdUp = waitForUpOrCancellation(
       minUptime = thirdDown.uptimeMillis + doubleTapTimeout,
       onNewPointerInputChange = { pointerInputChange ->
@@ -230,7 +220,7 @@ private suspend fun AwaitPointerEventScope.detectTextSelectionGesture(
     return@withTimeoutOrNull null
   }
 
-  if (trippleTap == null) {
+  if (tripleTap == null) {
     val localLastPointerInputChange = lastPointerInputChange
     if (localLastPointerInputChange == null) {
       // Double tap
@@ -247,10 +237,10 @@ private suspend fun AwaitPointerEventScope.detectTextSelectionGesture(
     )
   }
 
-  // Tripple tap
+  // Triple tap
   return TextSelectionGesture.SelectSentence(
-    position = trippleTap.position,
-    id = trippleTap.id
+    position = tripleTap.position,
+    id = tripleTap.id
   )
 }
 
@@ -320,12 +310,6 @@ private sealed interface TextSelectionGesture {
   val position: Offset
   val id: PointerId
   val dragMode: DragMode
-
-  data class DragSelectionHandle(
-    override val position: Offset,
-    override val id: PointerId,
-    override val dragMode: DragMode
-  ) : TextSelectionGesture
 
   data class SelectWord(
     override val position: Offset,

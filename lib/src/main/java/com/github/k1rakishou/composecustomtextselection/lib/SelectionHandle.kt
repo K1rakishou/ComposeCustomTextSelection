@@ -1,51 +1,107 @@
 package com.github.k1rakishou.composecustomtextselection.lib
 
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.isUnspecified
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.layout.LayoutCoordinates
 
-data class SelectionHandle(
-  val textOffset: Int = -1,
-  val charBBox: Rect = Rect.Zero,
-  val painter: Painter? = null
-) {
-  fun leftHandleBBox(): Rect? {
-    val bottomLeft = charBBox.bottomLeft
-    if (bottomLeft.isUnspecified) {
-      return null
-    }
+@Stable
+class SelectionHandle {
+  private val _textOffset = mutableIntStateOf(-1)
+  val textOffset: Int
+    get() = _textOffset.intValue
 
-    val size = painter?.intrinsicSize
-      ?: return null
+  private val _charBBox = mutableStateOf<Rect?>(null)
 
-    val left = bottomLeft.x - size.width
-    val top = bottomLeft.y
+  private val _painter = mutableStateOf<Painter?>(null)
+  val painter: Painter?
+    get() = _painter.value
 
-    return Rect(
-      left = left,
-      top = top,
-      right = left + size.width,
-      bottom = top + size.height
-    )
+  private val _selectableTextLayoutCoordinates = mutableStateOf<LayoutCoordinates?>(null)
+  val selectableTextLayoutCoordinates: LayoutCoordinates?
+    get() = _selectableTextLayoutCoordinates.value
+
+  private val _popupLayoutCoordinates = mutableStateOf<LayoutCoordinates?>(null)
+  val popupLayoutCoordinates: LayoutCoordinates?
+    get() = _popupLayoutCoordinates.value
+
+  val isInitialized: Boolean
+    get() = _textOffset.intValue >= 0 && _charBBox.value != null && _painter.value != null
+
+  fun updateSelectableTextLayoutCoordinates(layoutCoordinates: LayoutCoordinates) {
+    _selectableTextLayoutCoordinates.value = layoutCoordinates
   }
 
-  fun rightHandleBBox(): Rect? {
-    val bottomRight = charBBox.bottomRight
-    if (bottomRight.isUnspecified) {
-      return null
+  fun updatePopupLayoutCoordinates(layoutCoordinates: LayoutCoordinates) {
+    _popupLayoutCoordinates.value = layoutCoordinates
+  }
+
+  fun update(
+    textOffset: Int? = null,
+    charBBox: Rect? = null,
+    painter: Painter? = null
+  ): Boolean {
+    var updated = false
+
+    if (textOffset != null && textOffset != _textOffset.intValue) {
+      _textOffset.intValue = textOffset
+      updated = true
     }
 
-    val size = painter?.intrinsicSize
+    if (charBBox != null && charBBox != _charBBox.value) {
+      _charBBox.value = charBBox
+      updated = true
+    }
+
+    if (painter != null && painter != _painter.value) {
+      _painter.value = painter
+      updated = true
+    }
+
+    return updated
+  }
+
+  fun textRelativeHandleBBox(left: Boolean): Rect? {
+    val size = _painter.value?.intrinsicSize
       ?: return null
 
-    val left = bottomRight.x
-    val top = bottomRight.y
+    if (left) {
+      val bottomLeft = _charBBox.value?.bottomLeft
+        ?: return null
 
-    return Rect(
-      left = left,
-      top = top,
-      right = left + size.width,
-      bottom = top + size.height
-    )
+      val left = bottomLeft.x - size.width
+      val top = bottomLeft.y
+
+      return Rect(
+        left = left,
+        top = top,
+        right = left + size.width,
+        bottom = top + size.height
+      )
+    } else {
+      val bottomRight = _charBBox.value?.bottomRight
+        ?: return null
+
+      val size = _painter.value?.intrinsicSize
+        ?: return null
+
+      val left = bottomRight.x
+      val top = bottomRight.y
+
+      return Rect(
+        left = left,
+        top = top,
+        right = left + size.width,
+        bottom = top + size.height
+      )
+    }
+  }
+
+  fun reset() {
+    _textOffset.intValue = -1
+    _charBBox.value = null
+    _painter.value = null
   }
 }
