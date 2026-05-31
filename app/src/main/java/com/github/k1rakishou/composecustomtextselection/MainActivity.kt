@@ -118,40 +118,40 @@ private fun CustomSelectableText(
 ) {
   val density = LocalDensity.current
   val lifecycleOwner = LocalLifecycleOwner.current
+  val handleSize = 28.dp
 
   val spritesheetBitmap = ImageBitmap.imageResource(id = R.drawable.cursor_spritesheet)
-  val leftHandlePainter = remember {
+  val startHandlePainter = remember {
     AnimatedSelectionHandlePainter(
       isLeftHandle = true,
       bitmap = spritesheetBitmap,
       frameCount = 10,
       frameSize = 32,
-      painterSize = with(density) { 24.dp.roundToPx() },
+      size = with(density) { handleSize.roundToPx() },
       frameDurationMs = 16 * 6
     )
   }
-  val rightHandlePainter = remember {
+  val endHandlePainter = remember {
     AnimatedSelectionHandlePainter(
       isLeftHandle = false,
       bitmap = spritesheetBitmap,
       frameCount = 10,
       frameSize = 32,
-      painterSize = with(density) { 24.dp.roundToPx() },
+      size = with(density) { handleSize.roundToPx() },
       frameDurationMs = 16 * 6
     )
   }
 
   val textSelectionState = rememberTextSelectionState(
-    leftSelectionHandlePainter = leftHandlePainter,
-    rightSelectionHandlePainter = rightHandlePainter,
+    handleSize = handleSize,
     debugMode = true
   )
   val copySelectedTextUpdated by rememberUpdatedState(newValue = copySelectedText)
 
-  LaunchedEffect(key1 = leftHandlePainter, key2 = rightHandlePainter) {
+  LaunchedEffect(key1 = startHandlePainter, key2 = endHandlePainter) {
     lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-      launch { leftHandlePainter.animate() }
-      launch { rightHandlePainter.animate() }
+      launch { startHandlePainter.animate() }
+      launch { endHandlePainter.animate() }
     }
   }
 
@@ -159,6 +159,9 @@ private fun CustomSelectableText(
     modifier = Modifier
       .wrapContentHeight(),
     selectableTextState = textSelectionState,
+    handleSize = handleSize,
+    startSelectionHandlePainter = startHandlePainter,
+    endSelectionHandlePainter = endHandlePainter,
     onClicked = { println("TTTAAA onClicked") },
     onLongClicked = { println("TTTAAA onLongClicked") },
     textContent = { onTextLayout ->

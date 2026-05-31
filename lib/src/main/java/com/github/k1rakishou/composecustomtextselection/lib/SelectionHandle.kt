@@ -4,20 +4,18 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.LayoutCoordinates
 
 @Stable
-class SelectionHandle {
+class SelectionHandle(
+  private val handleSize: Size
+) {
   private val _textOffset = mutableIntStateOf(-1)
   val textOffset: Int
     get() = _textOffset.intValue
 
   private val _charBBox = mutableStateOf<Rect?>(null)
-
-  private val _painter = mutableStateOf<Painter?>(null)
-  val painter: Painter?
-    get() = _painter.value
 
   private val _selectableTextLayoutCoordinates = mutableStateOf<LayoutCoordinates?>(null)
   val selectableTextLayoutCoordinates: LayoutCoordinates?
@@ -28,7 +26,7 @@ class SelectionHandle {
     get() = _popupLayoutCoordinates.value
 
   val isInitialized: Boolean
-    get() = _textOffset.intValue >= 0 && _charBBox.value != null && _painter.value != null
+    get() = _textOffset.intValue >= 0 && _charBBox.value != null
 
   fun updateSelectableTextLayoutCoordinates(layoutCoordinates: LayoutCoordinates) {
     _selectableTextLayoutCoordinates.value = layoutCoordinates
@@ -41,7 +39,6 @@ class SelectionHandle {
   fun update(
     textOffset: Int? = null,
     charBBox: Rect? = null,
-    painter: Painter? = null
   ): Boolean {
     var updated = false
 
@@ -55,36 +52,25 @@ class SelectionHandle {
       updated = true
     }
 
-    if (painter != null && painter != _painter.value) {
-      _painter.value = painter
-      updated = true
-    }
-
     return updated
   }
 
   fun textRelativeHandleBBox(left: Boolean): Rect? {
-    val size = _painter.value?.intrinsicSize
-      ?: return null
-
     if (left) {
       val bottomLeft = _charBBox.value?.bottomLeft
         ?: return null
 
-      val left = bottomLeft.x - size.width
+      val left = bottomLeft.x - handleSize.width
       val top = bottomLeft.y
 
       return Rect(
         left = left,
         top = top,
-        right = left + size.width,
-        bottom = top + size.height
+        right = left + handleSize.width,
+        bottom = top + handleSize.height
       )
     } else {
       val bottomRight = _charBBox.value?.bottomRight
-        ?: return null
-
-      val size = _painter.value?.intrinsicSize
         ?: return null
 
       val left = bottomRight.x
@@ -93,8 +79,8 @@ class SelectionHandle {
       return Rect(
         left = left,
         top = top,
-        right = left + size.width,
-        bottom = top + size.height
+        right = left + handleSize.width,
+        bottom = top + handleSize.height
       )
     }
   }
@@ -102,6 +88,5 @@ class SelectionHandle {
   fun reset() {
     _textOffset.intValue = -1
     _charBBox.value = null
-    _painter.value = null
   }
 }

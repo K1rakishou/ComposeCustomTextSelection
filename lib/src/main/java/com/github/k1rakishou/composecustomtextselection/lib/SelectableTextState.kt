@@ -1,21 +1,18 @@
 package com.github.k1rakishou.composecustomtextselection.lib
 
-import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -24,10 +21,8 @@ import java.text.BreakIterator
 import java.util.Locale
 
 class SelectableTextState(
+  val handleSize: Size,
   selectionColor: Color,
-  private val leftPainter: Painter,
-  private val rightPainter: Painter,
-  val size: Dp,
   val debugMode: Boolean
 ) {
   private val _focusEventFlow = MutableSharedFlow<Unit>(extraBufferCapacity = Channel.RENDEZVOUS)
@@ -35,10 +30,8 @@ class SelectableTextState(
     get() = _focusEventFlow.asSharedFlow()
 
   private val _textLayoutResultState = mutableStateOf<TextLayoutResult?>(null)
-
-  private val _selectionPath = mutableStateOf<Path?>(null)
-  val selectionPath: State<Path?>
-    get() = _selectionPath
+  val textLayoutResult: TextLayoutResult?
+    get() = _textLayoutResultState.value
   private val _selectionColor = mutableStateOf(selectionColor)
   val selectionColor: State<Color>
     get() = _selectionColor
@@ -50,8 +43,37 @@ class SelectableTextState(
   val dragMode: DragMode?
     get() = _dragMode
 
-  val leftSelectionHandle = SelectionHandle()
-  val rightSelectionHandle = SelectionHandle()
+  private val _leftSelectionHandle = SelectionHandle(handleSize)
+  private val _rightSelectionHandle = SelectionHandle(handleSize)
+
+  val handlesCrossed: Boolean
+    get() = _leftSelectionHandle.textOffset > _rightSelectionHandle.textOffset
+
+  val startSelectionHandle: SelectionHandle
+    get() {
+      return if (!handlesCrossed) {
+        _leftSelectionHandle
+      } else {
+        _rightSelectionHandle
+      }
+    }
+
+  val endSelectionHandle: SelectionHandle
+    get() {
+      return if (!handlesCrossed) {
+        _rightSelectionHandle
+      } else {
+        _leftSelectionHandle
+      }
+    }
+
+  fun isStartHandle(handle: SelectionHandle): Boolean {
+    return handle === startSelectionHandle
+  }
+
+  fun isEndHandle(handle: SelectionHandle): Boolean {
+    return handle === endSelectionHandle
+  }
 
   fun updateTextLayoutResult(textLayoutResult: TextLayoutResult) {
     Snapshot.withMutableSnapshot {
@@ -60,15 +82,23 @@ class SelectableTextState(
   }
 
   fun updateSelectableTextLayoutCoordinates(layoutCoordinates: LayoutCoordinates) {
-    leftSelectionHandle.updateSelectableTextLayoutCoordinates(layoutCoordinates)
-    rightSelectionHandle.updateSelectableTextLayoutCoordinates(layoutCoordinates)
+    startSelectionHandle.updateSelectableTextLayoutCoordinates(layoutCoordinates)
+    endSelectionHandle.updateSelectableTextLayoutCoordinates(layoutCoordinates)
   }
 
   fun updatePopupLayoutCoordinates(isLeftHandle: Boolean, layoutCoordinates: LayoutCoordinates) {
     if (isLeftHandle) {
-      leftSelectionHandle.updatePopupLayoutCoordinates(layoutCoordinates)
+      startSelectionHandle.updatePopupLayoutCoordinates(layoutCoordinates)
     } else {
-      rightSelectionHandle.updatePopupLayoutCoordinates(layoutCoordinates)
+      endSelectionHandle.updatePopupLayoutCoordinates(layoutCoordinates)
+    }
+  }
+
+  fun grabHandleForDragging(isLeftHandle: Boolean): SelectionHandle {
+    return if (isLeftHandle) {
+      _leftSelectionHandle
+    } else {
+      _rightSelectionHandle
     }
   }
 
@@ -78,9 +108,8 @@ class SelectableTextState(
 
     when (dragMode) {
       is DragMode.DraggingHandle -> {
-        checkNotNull(_selectionPath.value) { "selection path is null" }
-        check(leftSelectionHandle.isInitialized) { "leftSelectionHandle is not initialized" }
-        check(rightSelectionHandle.isInitialized) { "rightSelectionHandle is not initialized" }
+        check(_leftSelectionHandle.isInitialized) { "leftSelectionHandle is not initialized" }
+        check(_rightSelectionHandle.isInitialized) { "rightSelectionHandle is not initialized" }
       }
       is DragMode.ExtendingSelection -> {
         val charOffset = textLayoutResult.getOffsetForPosition(startPoint)
@@ -95,21 +124,14 @@ class SelectableTextState(
           return
         }
 
-        _selectionPath.value = textLayoutResult.getPathForRange(
-          start = textRange.start,
-          end = textRange.end
-        )
-
-        leftSelectionHandle.update(
+        _leftSelectionHandle.update(
           textOffset = textRange.start,
           charBBox = textLayoutResult.getBoundingBox(textRange.start),
-          painter = leftPainter
         )
 
-        rightSelectionHandle.update(
+        _rightSelectionHandle.update(
           textOffset = textRange.end,
           charBBox = textLayoutResult.getBoundingBox(textRange.end - 1),
-          painter = rightPainter
         )
       }
     }
@@ -120,14 +142,15 @@ class SelectableTextState(
         return@run startPoint
       }
 
+      val isLeftHandle = dragMode.dragged == _leftSelectionHandle
       val handleBBox = checkNotNull(
-        leftSelectionHandle.textRelativeHandleBBox(left = dragMode.isLeftHandle)
+        startSelectionHandle.textRelativeHandleBBox(left = isLeftHandle)
       )
 
       var updatedPosition = startPoint
       updatedPosition -= Offset(x = 0f, y = handleBBox.height)
 
-      if (dragMode.isLeftHandle) {
+      if (isLeftHandle) {
         updatedPosition += Offset(x = handleBBox.width / 2f, y = 0f)
       } else {
         updatedPosition -= Offset(x = handleBBox.width / 2f, y = 0f)
@@ -141,7 +164,7 @@ class SelectableTextState(
   }
 
   fun onDragProgress(delta: Offset) {
-    if (!leftSelectionHandle.isInitialized || !rightSelectionHandle.isInitialized) {
+    if (!startSelectionHandle.isInitialized || !endSelectionHandle.isInitialized) {
       return
     }
 
@@ -156,71 +179,57 @@ class SelectableTextState(
     val newTextOffset = textLayoutResult.getOffsetForPosition(newPointerPosition)
       .coerceIn(0, text.lastIndex)
 
-    var leftSelectionHandleUpdated = false
-    var rightSelectionHandleUpdated = false
-
     run {
       when (dragMode) {
         is DragMode.ExtendingSelection -> {
-          if (newTextOffset < leftSelectionHandle.textOffset) {
-            leftSelectionHandleUpdated = leftSelectionHandle.update(
+          if (newTextOffset < startSelectionHandle.textOffset) {
+            startSelectionHandle.update(
               textOffset = newTextOffset,
               charBBox = textLayoutResult.getBoundingBox(newTextOffset)
             )
-          } else if (newTextOffset > rightSelectionHandle.textOffset) {
-            rightSelectionHandleUpdated = rightSelectionHandle.update(
+          } else if (newTextOffset > endSelectionHandle.textOffset) {
+            endSelectionHandle.update(
               textOffset = newTextOffset,
               charBBox = textLayoutResult.getBoundingBox(newTextOffset - 1)
             )
           }
         }
         is DragMode.DraggingHandle -> {
-          if (dragMode.isLeftHandle) {
-            val prevTextOffset = rightSelectionHandle.textOffset
-
-            // Do not allow shrinking the text selection to have less than 1 selected character.
-            val adjustedTextOffset = if (newTextOffset > prevTextOffset - 1) {
-              prevTextOffset - 1
-            } else {
-              newTextOffset
-            }
-
-            leftSelectionHandleUpdated = leftSelectionHandle.update(
-              textOffset = adjustedTextOffset,
-              charBBox = textLayoutResult.getBoundingBox(adjustedTextOffset)
-            )
+          val dragged = dragMode.dragged
+          val other = if (dragged === _leftSelectionHandle) {
+            _rightSelectionHandle
           } else {
-            val prevTextOffset = leftSelectionHandle.textOffset
-
-            // Do not allow shrinking the text selection to have less than 1 selected character.
-            val adjustedTextOffset = if (newTextOffset < prevTextOffset + 1) {
-              prevTextOffset + 1
-            } else {
-              newTextOffset
-            }
-
-            rightSelectionHandleUpdated = rightSelectionHandle.update(
-              textOffset = adjustedTextOffset,
-              charBBox = textLayoutResult.getBoundingBox(adjustedTextOffset - 1)
-            )
+            _leftSelectionHandle
           }
+
+          val safeOffset = when {
+            newTextOffset < other.textOffset -> newTextOffset
+            newTextOffset > other.textOffset -> newTextOffset
+            else -> {
+              if (dragged.textOffset < other.textOffset) {
+                other.textOffset - 1
+              } else {
+                other.textOffset + 1
+              }
+            }
+          }.coerceIn(0, text.lastIndex)
+
+          val bboxOffset = if (safeOffset < other.textOffset) {
+            safeOffset
+          } else {
+            safeOffset - 1
+          }
+
+          dragged.update(
+            textOffset = safeOffset,
+            charBBox = textLayoutResult.getBoundingBox(bboxOffset.coerceAtLeast(0))
+          )
         }
-      }
-    }
-
-    if (leftSelectionHandleUpdated || rightSelectionHandleUpdated) {
-      // TODO: haptic feedback
-
-      Snapshot.withMutableSnapshot {
-        _selectionPath.value = textLayoutResult.getPathForRange(
-          start = leftSelectionHandle.textOffset,
-          end = rightSelectionHandle.textOffset
-        )
       }
     }
   }
 
-  fun onDragStop(stoppedNormally: Boolean) {
+  fun onDragStop() {
     _localPointerPosition.value = null
   }
 
@@ -228,9 +237,8 @@ class SelectableTextState(
     Snapshot.withMutableSnapshot {
       _localPointerPosition.value = null
       _dragMode = null
-      _selectionPath.value = Path()
-      leftSelectionHandle.reset()
-      rightSelectionHandle.reset()
+      startSelectionHandle.reset()
+      endSelectionHandle.reset()
     }
   }
 
@@ -288,7 +296,7 @@ class SelectableTextState(
 }
 
 sealed interface DragMode {
-  data class DraggingHandle(val isLeftHandle: Boolean) : DragMode
+  data class DraggingHandle(val dragged: SelectionHandle) : DragMode
   data class ExtendingSelection(val initialSelectionMode: InitialSelectionMode) : DragMode
 }
 
@@ -303,40 +311,15 @@ enum class InitialSelectionMode {
 @Composable
 fun rememberTextSelectionState(
   selectionColor: Color = Color(0x804FCEF7L),
-  cursorColor: Color = Color(0xFF0BB7EFL),
-  size: Dp = 28.dp,
-  leftSelectionHandlePainter: Painter? = null,
-  rightSelectionHandlePainter: Painter? = null,
+  handleSize: Dp,
   debugMode: Boolean = false,
 ): SelectableTextState {
-  val leftPainter = remember {
-    if (leftSelectionHandlePainter != null) {
-      return@remember leftSelectionHandlePainter
-    }
-
-    return@remember DefaultSelectionHandlePainter(
-      isLeftHandle = true,
-      color = cursorColor
-    )
-  }
-
-  val rightPainter = remember {
-    if (rightSelectionHandlePainter != null) {
-      return@remember rightSelectionHandlePainter
-    }
-
-    return@remember DefaultSelectionHandlePainter(
-      isLeftHandle = false,
-      color = cursorColor
-    )
-  }
+  val density = LocalDensity.current
 
   return remember {
     SelectableTextState(
+      handleSize = with(density) { Size(handleSize.toPx(), handleSize.toPx()) },
       selectionColor = selectionColor,
-      leftPainter = leftPainter,
-      rightPainter = rightPainter,
-      size = size,
       debugMode = debugMode
     )
   }

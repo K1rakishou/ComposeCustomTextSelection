@@ -33,12 +33,14 @@ internal suspend fun PointerInputScope.textSelectionAfterHandleDrag(
 
       selectableTextState.onDragStart(
         startPoint = textRelativeOffset,
-        dragMode = DragMode.DraggingHandle(isLeftHandle)
+        dragMode = DragMode.DraggingHandle(
+          dragged = selectableTextState.grabHandleForDragging(isLeftHandle)
+        )
       )
     },
     onDrag = { _, delta -> selectableTextState.onDragProgress(delta) },
-    onDragEnd = { selectableTextState.onDragStop(stoppedNormally = true) },
-    onDragCancel = { selectableTextState.onDragStop(stoppedNormally = false) }
+    onDragEnd = { selectableTextState.onDragStop() },
+    onDragCancel = { selectableTextState.onDragStop() }
   )
 }
 
@@ -93,7 +95,7 @@ internal suspend fun PointerInputScope.textSelectionAfterDoubleTapOrTapWithLongT
         }
       }
 
-      selectableTextState.onDragStop(stoppedNormally = stoppedNormally)
+      selectableTextState.onDragStop()
     }
   }
 }

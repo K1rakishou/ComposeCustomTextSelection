@@ -1,6 +1,5 @@
 package com.github.k1rakishou.composecustomtextselection.lib
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Indication
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.focusable
@@ -8,6 +7,7 @@ import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -21,9 +21,11 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -34,10 +36,16 @@ import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.flow.collectLatest
 
+private val DefaultHandleColor = Color(0xFF0BB7EFL)
+
 @Composable
 fun SelectableTextContainer(
   modifier: Modifier = Modifier,
   selectableTextState: SelectableTextState,
+  cursorColor: Color = DefaultHandleColor,
+  handleSize: Dp,
+  startSelectionHandlePainter: Painter? = null,
+  endSelectionHandlePainter: Painter? = null,
   indication: Indication? = LocalIndication.current,
   interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
   onClicked: (() -> Unit)? = null,
@@ -47,14 +55,34 @@ fun SelectableTextContainer(
   val focusRequester = remember { FocusRequester() }
 
   val selectionColor by selectableTextState.selectionColor
-  val selectionPathMut by selectableTextState.selectionPath
-  val selectionPath = selectionPathMut
   val pointerPositionMut by selectableTextState.localPointerPosition
   val pointerPosition = pointerPositionMut
 
   LaunchedEffect(key1 = selectableTextState) {
     selectableTextState.focusEventFlow
       .collectLatest { focusRequester.requestFocus() }
+  }
+
+  val startHandlePainter = remember(cursorColor, startSelectionHandlePainter) {
+    if (startSelectionHandlePainter != null) {
+      return@remember startSelectionHandlePainter
+    }
+
+    return@remember DefaultSelectionHandlePainter(
+      isLeftHandle = true,
+      color = cursorColor
+    )
+  }
+
+  val endHandlePainter = remember(cursorColor, endSelectionHandlePainter) {
+    if (endSelectionHandlePainter != null) {
+      return@remember endSelectionHandlePainter
+    }
+
+    return@remember DefaultSelectionHandlePainter(
+      isLeftHandle = false,
+      color = cursorColor
+    )
   }
 
   Box(
@@ -94,40 +122,59 @@ fun SelectableTextContainer(
       selectableTextState.updateTextLayoutResult(textLayoutResult)
     }
 
-    Canvas(modifier = Modifier.matchParentSize()) {
-      if (selectionPath != null) {
-        drawPath(selectionPath, selectionColor)
-      }
+    Spacer(
+      modifier = Modifier
+        .fillMaxSize()
+        .drawWithCache {
+          onDrawWithContent {
+            drawContent()
 
-      if (selectableTextState.debugMode && pointerPosition != null) {
-        drawCircle(color = Color.Red, radius = 2.dp.toPx(), center = pointerPosition)
-      }
-    }
+            val textLayoutResult = selectableTextState.textLayoutResult
+            if (textLayoutResult != null) {
+              val start = selectableTextState.startSelectionHandle.textOffset
+              val end = selectableTextState.endSelectionHandle.textOffset
 
-    SelectionHandleElement(
-      selectableTextState = selectableTextState,
-      isLeftHandle = true,
+              if (start >= 0 && end >= 0 && start <= end) {
+                val path = textLayoutResult.getPathForRange(start, end)
+                if (!path.isEmpty) {
+                  drawPath(path, selectionColor)
+                }
+              }
+            }
+
+            if (selectableTextState.debugMode && pointerPosition != null) {
+              drawCircle(color = Color.Red, radius = 2.dp.toPx(), center = pointerPosition)
+            }
+          }
+        }
     )
 
     SelectionHandleElement(
+      handleSize = handleSize,
       selectableTextState = selectableTextState,
-      isLeftHandle = false,
+      selectionHandle = selectableTextState.startSelectionHandle,
+      handlePainter = startHandlePainter
+    )
+
+    SelectionHandleElement(
+      handleSize = handleSize,
+      selectableTextState = selectableTextState,
+      selectionHandle = selectableTextState.endSelectionHandle,
+      handlePainter = endHandlePainter
     )
   }
 }
 
 @Composable
 private fun SelectionHandleElement(
+  handleSize: Dp,
   selectableTextState: SelectableTextState,
-  isLeftHandle: Boolean,
+  selectionHandle: SelectionHandle,
+  handlePainter: Painter
 ) {
-  val selectionHandle = if (isLeftHandle) {
-    selectableTextState.leftSelectionHandle
-  } else {
-    selectableTextState.rightSelectionHandle
-  }
+  val isStartHandle = selectableTextState.isStartHandle(selectionHandle)
 
-  val popupPositionProvider = remember(key1 = selectionHandle, key2 = isLeftHandle) {
+  val popupPositionProvider = remember(isStartHandle, selectionHandle) {
     object : PopupPositionProvider {
       private var _prevOffset = IntOffset.Zero
 
@@ -137,7 +184,7 @@ private fun SelectionHandleElement(
         layoutDirection: LayoutDirection,
         popupContentSize: IntSize
       ): IntOffset {
-        val handleBBox = selectionHandle.textRelativeHandleBBox(isLeftHandle)
+        val handleBBox = selectionHandle.textRelativeHandleBBox(isStartHandle)
 
         val intOffset = if (handleBBox == null) {
           _prevOffset
@@ -177,13 +224,13 @@ private fun SelectionHandleElement(
       modifier = Modifier
         .onGloballyPositioned { layoutCoordinates ->
           selectableTextState.updatePopupLayoutCoordinates(
-            isLeftHandle = isLeftHandle,
+            isLeftHandle = isStartHandle,
             layoutCoordinates = layoutCoordinates
           )
         }
-        .pointerInput(isLeftHandle, selectionHandle, selectableTextState) {
+        .pointerInput(isStartHandle, selectableTextState) {
           textSelectionAfterHandleDrag(
-            isLeftHandle = isLeftHandle,
+            isLeftHandle = isStartHandle,
             selectionHandle = selectionHandle,
             selectableTextState = selectableTextState
           )
@@ -196,11 +243,8 @@ private fun SelectionHandleElement(
               return@onDrawWithContent
             }
 
-            val painter = selectionHandle.painter
-              ?: return@onDrawWithContent
-
-            with(painter) {
-              draw(painter.intrinsicSize)
+            with(handlePainter) {
+              draw(handlePainter.intrinsicSize)
             }
 
             if (selectableTextState.debugMode) {
@@ -211,7 +255,7 @@ private fun SelectionHandleElement(
             }
           }
         }
-        .size(selectableTextState.size)
+        .size(handleSize)
     )
   }
 }

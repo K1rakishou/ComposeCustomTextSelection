@@ -21,13 +21,13 @@ class AnimatedSelectionHandlePainter(
   private val bitmap: ImageBitmap,
   private val frameCount: Int,
   private val frameSize: Int,
-  private val painterSize: Int,
+  private val size: Int,
   private val frameDurationMs: Long,
 ) : Painter() {
 
   private var currentFrame by mutableIntStateOf(0)
 
-  override val intrinsicSize = Size(painterSize.toFloat(), painterSize.toFloat())
+  override val intrinsicSize = Size(size.toFloat(), size.toFloat())
 
   override fun DrawScope.onDraw() {
     drawIntoCanvas { canvas ->
