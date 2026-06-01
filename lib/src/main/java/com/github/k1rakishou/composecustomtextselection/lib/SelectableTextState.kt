@@ -38,9 +38,8 @@ class SelectableTextState(
   private val _localPointerPosition = mutableStateOf<Offset?>(null)
   val localPointerPosition: State<Offset?>
     get() = _localPointerPosition
-
-  private var _dragMode: DragMode? = null
-  val dragMode: DragMode?
+  private var _dragMode = mutableStateOf<DragMode?>(null)
+  val dragMode: State<DragMode?>
     get() = _dragMode
 
   private val _leftSelectionHandle = SelectionHandle(handleSize)
@@ -94,8 +93,8 @@ class SelectableTextState(
     }
   }
 
-  fun grabHandleForDragging(isLeftHandle: Boolean): SelectionHandle {
-    return if (isLeftHandle) {
+  fun grabHandleForDragging(isStartHandle: Boolean): SelectionHandle {
+    return if (isStartHandle) {
       _leftSelectionHandle
     } else {
       _rightSelectionHandle
@@ -136,21 +135,21 @@ class SelectableTextState(
       }
     }
 
-    _dragMode = dragMode
+    _dragMode.value = dragMode
     _localPointerPosition.value = run {
       if (dragMode !is DragMode.DraggingHandle) {
         return@run startPoint
       }
 
-      val isLeftHandle = dragMode.dragged == _leftSelectionHandle
+      val isStartHandle = isStartHandle(dragMode.dragged)
       val handleBBox = checkNotNull(
-        startSelectionHandle.textRelativeHandleBBox(left = isLeftHandle)
+        startSelectionHandle.textRelativeHandleBBox(isStartHandle = isStartHandle)
       )
 
       var updatedPosition = startPoint
       updatedPosition -= Offset(x = 0f, y = handleBBox.height)
 
-      if (isLeftHandle) {
+      if (isStartHandle) {
         updatedPosition += Offset(x = handleBBox.width / 2f, y = 0f)
       } else {
         updatedPosition -= Offset(x = handleBBox.width / 2f, y = 0f)
@@ -169,7 +168,7 @@ class SelectableTextState(
     }
 
     val textLayoutResult = _textLayoutResultState.value ?: return
-    val dragMode = _dragMode ?: return
+    val dragMode = _dragMode.value ?: return
     val prevPointerPosition = _localPointerPosition.value ?: return
     val text = textLayoutResult.layoutInput.text
 
@@ -236,7 +235,7 @@ class SelectableTextState(
   fun resetEverything() {
     Snapshot.withMutableSnapshot {
       _localPointerPosition.value = null
-      _dragMode = null
+      _dragMode.value = null
       startSelectionHandle.reset()
       endSelectionHandle.reset()
     }

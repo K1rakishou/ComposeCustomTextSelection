@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.magnifier
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,6 +39,8 @@ import kotlinx.coroutines.flow.collectLatest
 
 private val DefaultHandleColor = Color(0xFF0BB7EFL)
 
+// TODO: fix a bug where dragging a crossed handle will drag the opposite handle instead.
+
 @Composable
 fun SelectableTextContainer(
   modifier: Modifier = Modifier,
@@ -57,6 +60,8 @@ fun SelectableTextContainer(
   val selectionColor by selectableTextState.selectionColor
   val pointerPositionMut by selectableTextState.localPointerPosition
   val pointerPosition = pointerPositionMut
+  val dragModeMut by selectableTextState.dragMode
+  val dragMode = dragModeMut
 
   LaunchedEffect(key1 = selectableTextState) {
     selectableTextState.focusEventFlow
@@ -83,6 +88,14 @@ fun SelectableTextContainer(
       isLeftHandle = false,
       color = cursorColor
     )
+  }
+
+  val magnifierModifier = if (dragMode is DragMode.DraggingHandle) {
+    Modifier.magnifier(
+      sourceCenter = { selectableTextState.localPointerPosition.value ?: Offset.Unspecified },
+    )
+  } else {
+    Modifier
   }
 
   Box(
@@ -116,6 +129,7 @@ fun SelectableTextContainer(
               )
             }
           )
+          .then(magnifierModifier)
       )
   ) {
     textContent { textLayoutResult ->

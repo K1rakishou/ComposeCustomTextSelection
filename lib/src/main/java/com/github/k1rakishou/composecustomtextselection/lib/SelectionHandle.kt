@@ -55,8 +55,8 @@ class SelectionHandle(
     return updated
   }
 
-  fun textRelativeHandleBBox(left: Boolean): Rect? {
-    if (left) {
+  fun textRelativeHandleBBox(isStartHandle: Boolean): Rect? {
+    if (isStartHandle) {
       val bottomLeft = _charBBox.value?.bottomLeft
         ?: return null
 

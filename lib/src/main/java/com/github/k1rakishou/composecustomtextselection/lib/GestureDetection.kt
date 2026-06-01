@@ -129,7 +129,7 @@ private suspend fun AwaitPointerEventScope.detectTextSelectionGesture(
     return null
   }
 
-  if (selectableTextState.dragMode != null) {
+  if (selectableTextState.dragMode.value != null) {
     onResetSelection()
   }
 
