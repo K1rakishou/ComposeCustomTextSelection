@@ -20,25 +20,20 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
+import com.github.k1rakishou.composecustomtextselection.lib.DefaultSelectionHandlePainter
 import com.github.k1rakishou.composecustomtextselection.lib.SelectableTextContainer
 import com.github.k1rakishou.composecustomtextselection.lib.rememberTextSelectionState
 import com.github.k1rakishou.composecustomtextselection.ui.theme.ComposeCustomTextSelectionTheme
-import kotlinx.coroutines.launch
+import com.github.k1rakishou.composecustomtextselection.lib.SelectableTextToolbarDefaults
 
 
 class MainActivity : ComponentActivity() {
@@ -116,44 +111,30 @@ fun Content() {
 private fun CustomSelectableText(
   copySelectedText: (AnnotatedString) -> Unit
 ) {
-  val density = LocalDensity.current
-  val lifecycleOwner = LocalLifecycleOwner.current
   val handleSize = 28.dp
+  val handleColor = remember { Color(0xFF0093afL) }
+  val toolbarBgColor = remember { Color(0xFFe1e2ed) }
+  val selectionColor = remember { Color(0xA00067a5L) }
 
-  val spritesheetBitmap = ImageBitmap.imageResource(id = R.drawable.cursor_spritesheet)
   val startHandlePainter = remember {
-    AnimatedSelectionHandlePainter(
+    DefaultSelectionHandlePainter(
+      color = handleColor,
       isLeftHandle = true,
-      bitmap = spritesheetBitmap,
-      frameCount = 10,
-      frameSize = 32,
-      size = with(density) { handleSize.roundToPx() },
-      frameDurationMs = 16 * 6
     )
   }
   val endHandlePainter = remember {
-    AnimatedSelectionHandlePainter(
+    DefaultSelectionHandlePainter(
+      color = handleColor,
       isLeftHandle = false,
-      bitmap = spritesheetBitmap,
-      frameCount = 10,
-      frameSize = 32,
-      size = with(density) { handleSize.roundToPx() },
-      frameDurationMs = 16 * 6
     )
   }
 
   val textSelectionState = rememberTextSelectionState(
+    selectionColor = selectionColor,
     handleSize = handleSize,
-    debugMode = true
+    debugMode = false
   )
   val copySelectedTextUpdated by rememberUpdatedState(newValue = copySelectedText)
-
-  LaunchedEffect(key1 = startHandlePainter, key2 = endHandlePainter) {
-    lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-      launch { startHandlePainter.animate() }
-      launch { endHandlePainter.animate() }
-    }
-  }
 
   SelectableTextContainer(
     modifier = Modifier
@@ -164,11 +145,15 @@ private fun CustomSelectableText(
     endSelectionHandlePainter = endHandlePainter,
     onClicked = { println("TTTAAA onClicked") },
     onLongClicked = { println("TTTAAA onLongClicked") },
+    toolbarColors = SelectableTextToolbarDefaults.colors(
+      backgroundColor = toolbarBgColor,
+      contentColor = Color.Black
+    ),
     toolbar = {
       item(key = "copy", text = "Copy") { selectedText ->
         copySelectedTextUpdated(selectedText.text)
       }
-      item(key = "log", text = "Log range", dismissSelectionOnClick = false) { selectedText ->
+      item(key = "search", text = "Search") { selectedText ->
         println("selected range: ${selectedText.range}")
       }
     },
