@@ -17,24 +17,10 @@ class SelectionHandle(
 
   private val _charBBox = mutableStateOf<Rect?>(null)
 
-  private val _selectableTextLayoutCoordinates = mutableStateOf<LayoutCoordinates?>(null)
-  val selectableTextLayoutCoordinates: LayoutCoordinates?
-    get() = _selectableTextLayoutCoordinates.value
-
-  private val _popupLayoutCoordinates = mutableStateOf<LayoutCoordinates?>(null)
-  val popupLayoutCoordinates: LayoutCoordinates?
-    get() = _popupLayoutCoordinates.value
+  internal var popupLayoutCoordinates: LayoutCoordinates? = null
 
   val isInitialized: Boolean
     get() = _textOffset.intValue >= 0 && _charBBox.value != null
-
-  fun updateSelectableTextLayoutCoordinates(layoutCoordinates: LayoutCoordinates) {
-    _selectableTextLayoutCoordinates.value = layoutCoordinates
-  }
-
-  fun updatePopupLayoutCoordinates(layoutCoordinates: LayoutCoordinates) {
-    _popupLayoutCoordinates.value = layoutCoordinates
-  }
 
   fun update(
     textOffset: Int? = null,

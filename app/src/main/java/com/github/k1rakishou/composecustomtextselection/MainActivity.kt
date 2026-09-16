@@ -164,6 +164,14 @@ private fun CustomSelectableText(
     endSelectionHandlePainter = endHandlePainter,
     onClicked = { println("TTTAAA onClicked") },
     onLongClicked = { println("TTTAAA onLongClicked") },
+    toolbar = {
+      item(key = "copy", text = "Copy") { selectedText ->
+        copySelectedTextUpdated(selectedText.text)
+      }
+      item(key = "log", text = "Log range", dismissSelectionOnClick = false) { selectedText ->
+        println("selected range: ${selectedText.range}")
+      }
+    },
     textContent = { onTextLayout ->
       Text(
         text = text,

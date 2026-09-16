@@ -8,12 +8,14 @@ import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.Dp
-import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -25,9 +27,12 @@ class SelectableTextState(
   selectionColor: Color,
   val debugMode: Boolean
 ) {
-  private val _focusEventFlow = MutableSharedFlow<Unit>(extraBufferCapacity = Channel.RENDEZVOUS)
-  val focusEventFlow: SharedFlow<Unit>
-    get() = _focusEventFlow.asSharedFlow()
+  private val _uiEventFlow = MutableSharedFlow<UiEvent>(
+    extraBufferCapacity = 16,
+    onBufferOverflow = BufferOverflow.DROP_OLDEST
+  )
+  internal val uiEventFlow: SharedFlow<UiEvent>
+    get() = _uiEventFlow.asSharedFlow()
 
   private val _textLayoutResultState = mutableStateOf<TextLayoutResult?>(null)
   val textLayoutResult: TextLayoutResult?
@@ -42,28 +47,63 @@ class SelectableTextState(
   val dragMode: State<DragMode?>
     get() = _dragMode
 
-  private val _leftSelectionHandle = SelectionHandle(handleSize)
-  private val _rightSelectionHandle = SelectionHandle(handleSize)
+  private val _selectableTextLayoutCoordinates = mutableStateOf<LayoutCoordinates?>(null)
+  val selectableTextLayoutCoordinates: LayoutCoordinates?
+    get() = _selectableTextLayoutCoordinates.value
+
+  private var _grabOffset = Offset.Zero
+
+  internal val leftSelectionHandle = SelectionHandle(handleSize)
+  internal val rightSelectionHandle = SelectionHandle(handleSize)
 
   val handlesCrossed: Boolean
-    get() = _leftSelectionHandle.textOffset > _rightSelectionHandle.textOffset
+    get() = leftSelectionHandle.textOffset > rightSelectionHandle.textOffset
 
   val startSelectionHandle: SelectionHandle
     get() {
       return if (!handlesCrossed) {
-        _leftSelectionHandle
+        leftSelectionHandle
       } else {
-        _rightSelectionHandle
+        rightSelectionHandle
       }
     }
 
   val endSelectionHandle: SelectionHandle
     get() {
       return if (!handlesCrossed) {
-        _rightSelectionHandle
+        rightSelectionHandle
       } else {
-        _leftSelectionHandle
+        leftSelectionHandle
       }
+    }
+
+  val hasSelection: Boolean
+    get() = _dragMode.value != null && leftSelectionHandle.isInitialized && rightSelectionHandle.isInitialized
+
+  val selectedTextRange: TextRange?
+    get() {
+      if (!hasSelection) {
+        return null
+      }
+
+      val start = startSelectionHandle.textOffset
+      val end = endSelectionHandle.textOffset
+      if (start >= end) {
+        return null
+      }
+
+      return TextRange(start, end)
+    }
+
+  val selectedText: AnnotatedString?
+    get() {
+      val textRange = selectedTextRange ?: return null
+      val text = textLayoutResult?.layoutInput?.text ?: return null
+
+      return text.subSequence(
+        startIndex = textRange.start.coerceIn(0, text.length),
+        endIndex = textRange.end.coerceIn(0, text.length)
+      )
     }
 
   fun isStartHandle(handle: SelectionHandle): Boolean {
@@ -81,37 +121,32 @@ class SelectableTextState(
   }
 
   fun updateSelectableTextLayoutCoordinates(layoutCoordinates: LayoutCoordinates) {
-    startSelectionHandle.updateSelectableTextLayoutCoordinates(layoutCoordinates)
-    endSelectionHandle.updateSelectableTextLayoutCoordinates(layoutCoordinates)
+    _selectableTextLayoutCoordinates.value = layoutCoordinates
   }
 
-  fun updatePopupLayoutCoordinates(isLeftHandle: Boolean, layoutCoordinates: LayoutCoordinates) {
-    if (isLeftHandle) {
-      startSelectionHandle.updatePopupLayoutCoordinates(layoutCoordinates)
-    } else {
-      endSelectionHandle.updatePopupLayoutCoordinates(layoutCoordinates)
-    }
-  }
-
-  fun grabHandleForDragging(isStartHandle: Boolean): SelectionHandle {
-    return if (isStartHandle) {
-      _leftSelectionHandle
-    } else {
-      _rightSelectionHandle
-    }
-  }
-
-  fun onDragStart(startPoint: Offset, dragMode: DragMode) {
+  fun onDragStart(fingerPosition: Offset, dragMode: DragMode) {
     val textLayoutResult = _textLayoutResultState.value ?: return
     val fullText = textLayoutResult.layoutInput.text.text
 
     when (dragMode) {
       is DragMode.DraggingHandle -> {
-        check(_leftSelectionHandle.isInitialized) { "leftSelectionHandle is not initialized" }
-        check(_rightSelectionHandle.isInitialized) { "rightSelectionHandle is not initialized" }
+        if (!leftSelectionHandle.isInitialized || !rightSelectionHandle.isInitialized) {
+          return
+        }
+
+        val isStartHandle = isStartHandle(dragMode.dragged)
+        val handleBBox = dragMode.dragged.textRelativeHandleBBox(isStartHandle = isStartHandle)
+          ?: return
+
+        // The handle hangs below the character it is attached to, on its left side for the start handle and on
+        // its right side for the end handle.
+        _grabOffset = Offset(
+          x = if (isStartHandle) handleBBox.width / 2f else -handleBBox.width / 2f,
+          y = -handleBBox.height
+        )
       }
       is DragMode.ExtendingSelection -> {
-        val charOffset = textLayoutResult.getOffsetForPosition(startPoint)
+        val charOffset = textLayoutResult.getOffsetForPosition(fingerPosition)
 
         val newTextRange = when (dragMode.initialSelectionMode) {
           InitialSelectionMode.Word -> textLayoutResult.getWordBoundary(charOffset)
@@ -123,108 +158,97 @@ class SelectableTextState(
           return
         }
 
-        _leftSelectionHandle.update(
+        leftSelectionHandle.update(
           textOffset = textRange.start,
           charBBox = textLayoutResult.getBoundingBox(textRange.start),
         )
 
-        _rightSelectionHandle.update(
+        rightSelectionHandle.update(
           textOffset = textRange.end,
           charBBox = textLayoutResult.getBoundingBox(textRange.end - 1),
         )
+
+        _grabOffset = Offset.Zero
+        _uiEventFlow.tryEmit(UiEvent.PerformHapticFeedback(HapticFeedbackType.LongPress))
       }
     }
 
     _dragMode.value = dragMode
-    _localPointerPosition.value = run {
-      if (dragMode !is DragMode.DraggingHandle) {
-        return@run startPoint
-      }
-
-      val isStartHandle = isStartHandle(dragMode.dragged)
-      val handleBBox = checkNotNull(
-        startSelectionHandle.textRelativeHandleBBox(isStartHandle = isStartHandle)
-      )
-
-      var updatedPosition = startPoint
-      updatedPosition -= Offset(x = 0f, y = handleBBox.height)
-
-      if (isStartHandle) {
-        updatedPosition += Offset(x = handleBBox.width / 2f, y = 0f)
-      } else {
-        updatedPosition -= Offset(x = handleBBox.width / 2f, y = 0f)
-      }
-
-      return@run updatedPosition
-    }
-
-    // TODO: haptic feedback
-    _focusEventFlow.tryEmit(Unit)
+    _localPointerPosition.value = fingerPosition + _grabOffset
+    _uiEventFlow.tryEmit(UiEvent.RequestFocus)
   }
 
-  fun onDragProgress(delta: Offset) {
+  fun onDragProgress(fingerPosition: Offset) {
     if (!startSelectionHandle.isInitialized || !endSelectionHandle.isInitialized) {
       return
     }
 
     val textLayoutResult = _textLayoutResultState.value ?: return
     val dragMode = _dragMode.value ?: return
-    val prevPointerPosition = _localPointerPosition.value ?: return
+    if (_localPointerPosition.value == null) {
+      return
+    }
+
     val text = textLayoutResult.layoutInput.text
 
-    val newPointerPosition = prevPointerPosition + delta
+    val newPointerPosition = fingerPosition + _grabOffset
     _localPointerPosition.value = newPointerPosition
 
     val newTextOffset = textLayoutResult.getOffsetForPosition(newPointerPosition)
       .coerceIn(0, text.lastIndex)
 
-    run {
-      when (dragMode) {
-        is DragMode.ExtendingSelection -> {
-          if (newTextOffset < startSelectionHandle.textOffset) {
-            startSelectionHandle.update(
-              textOffset = newTextOffset,
-              charBBox = textLayoutResult.getBoundingBox(newTextOffset)
-            )
-          } else if (newTextOffset > endSelectionHandle.textOffset) {
-            endSelectionHandle.update(
-              textOffset = newTextOffset,
-              charBBox = textLayoutResult.getBoundingBox(newTextOffset - 1)
-            )
-          }
-        }
-        is DragMode.DraggingHandle -> {
-          val dragged = dragMode.dragged
-          val other = if (dragged === _leftSelectionHandle) {
-            _rightSelectionHandle
-          } else {
-            _leftSelectionHandle
-          }
+    val prevLeftOffset = leftSelectionHandle.textOffset
+    val prevRightOffset = rightSelectionHandle.textOffset
 
-          val safeOffset = when {
-            newTextOffset < other.textOffset -> newTextOffset
-            newTextOffset > other.textOffset -> newTextOffset
-            else -> {
-              if (dragged.textOffset < other.textOffset) {
-                other.textOffset - 1
-              } else {
-                other.textOffset + 1
-              }
-            }
-          }.coerceIn(0, text.lastIndex)
-
-          val bboxOffset = if (safeOffset < other.textOffset) {
-            safeOffset
-          } else {
-            safeOffset - 1
-          }
-
-          dragged.update(
-            textOffset = safeOffset,
-            charBBox = textLayoutResult.getBoundingBox(bboxOffset.coerceAtLeast(0))
+    when (dragMode) {
+      is DragMode.ExtendingSelection -> {
+        if (newTextOffset < startSelectionHandle.textOffset) {
+          startSelectionHandle.update(
+            textOffset = newTextOffset,
+            charBBox = textLayoutResult.getBoundingBox(newTextOffset)
+          )
+        } else if (newTextOffset > endSelectionHandle.textOffset) {
+          endSelectionHandle.update(
+            textOffset = newTextOffset,
+            charBBox = textLayoutResult.getBoundingBox(newTextOffset - 1)
           )
         }
       }
+      is DragMode.DraggingHandle -> {
+        val dragged = dragMode.dragged
+        val other = if (dragged === leftSelectionHandle) {
+          rightSelectionHandle
+        } else {
+          leftSelectionHandle
+        }
+
+        val safeOffset = when {
+          newTextOffset < other.textOffset -> newTextOffset
+          newTextOffset > other.textOffset -> newTextOffset
+          else -> {
+            if (dragged.textOffset < other.textOffset) {
+              other.textOffset - 1
+            } else {
+              other.textOffset + 1
+            }
+          }
+        }.coerceIn(0, text.lastIndex)
+
+        val bboxOffset = if (safeOffset < other.textOffset) {
+          safeOffset
+        } else {
+          safeOffset - 1
+        }
+
+        dragged.update(
+          textOffset = safeOffset,
+          charBBox = textLayoutResult.getBoundingBox(bboxOffset.coerceAtLeast(0))
+        )
+      }
+    }
+
+    if (prevLeftOffset != leftSelectionHandle.textOffset || prevRightOffset != rightSelectionHandle.textOffset) {
+      _uiEventFlow.tryEmit(UiEvent.PerformHapticFeedback(HapticFeedbackType.TextHandleMove))
     }
   }
 
@@ -236,8 +260,9 @@ class SelectableTextState(
     Snapshot.withMutableSnapshot {
       _localPointerPosition.value = null
       _dragMode.value = null
-      startSelectionHandle.reset()
-      endSelectionHandle.reset()
+      _grabOffset = Offset.Zero
+      leftSelectionHandle.reset()
+      rightSelectionHandle.reset()
     }
   }
 
@@ -291,6 +316,11 @@ class SelectableTextState(
     }
 
     return textLayoutResult.getWordBoundary(charOffset)
+  }
+
+  internal sealed interface UiEvent {
+    data object RequestFocus : UiEvent
+    data class PerformHapticFeedback(val type: HapticFeedbackType) : UiEvent
   }
 }
 

@@ -22,23 +22,26 @@ import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
 internal suspend fun PointerInputScope.textSelectionAfterHandleDrag(
-  isLeftHandle: Boolean,
   selectionHandle: SelectionHandle,
   selectableTextState: SelectableTextState
 ) {
   detectDragGestures(
     onDragStart = { popupRelativeOffset ->
-      val textRelativeOffset = popupRelativeOffset.popupToLocal(selectionHandle)
+      val textRelativeOffset = popupRelativeOffset.popupToLocal(selectableTextState, selectionHandle)
         ?: return@detectDragGestures
 
       selectableTextState.onDragStart(
-        startPoint = textRelativeOffset,
-        dragMode = DragMode.DraggingHandle(
-          dragged = selectableTextState.grabHandleForDragging(isLeftHandle)
-        )
+        fingerPosition = textRelativeOffset,
+        dragMode = DragMode.DraggingHandle(dragged = selectionHandle)
       )
     },
-    onDrag = { _, delta -> selectableTextState.onDragProgress(delta) },
+    onDrag = { change, _ ->
+      val textRelativeOffset = change.position.popupToLocal(selectableTextState, selectionHandle)
+        ?: return@detectDragGestures
+
+      selectableTextState.onDragProgress(textRelativeOffset)
+      change.consume()
+    },
     onDragEnd = { selectableTextState.onDragStop() },
     onDragCancel = { selectableTextState.onDragStop() }
   )
@@ -60,7 +63,9 @@ internal suspend fun PointerInputScope.textSelectionAfterDoubleTapOrTapWithLongT
         onDown = { offset ->
           val press = PressInteraction.Press(offset)
           interactionSource.tryEmit(press)
-          pressRef.store(press)
+
+          pressRef.exchange(press)
+            ?.let { prevPress -> interactionSource.tryEmit(PressInteraction.Release(prevPress)) }
         },
         onUp = {
           pressRef.exchange(null)
@@ -77,12 +82,12 @@ internal suspend fun PointerInputScope.textSelectionAfterDoubleTapOrTapWithLongT
       }
 
       selectableTextState.onDragStart(
-        startPoint = textSelectionGesture.position,
+        fingerPosition = textSelectionGesture.position,
         dragMode = textSelectionGesture.dragMode,
       )
 
       val stoppedNormally = drag(textSelectionGesture.id) { change ->
-        selectableTextState.onDragProgress(change.positionChange())
+        selectableTextState.onDragProgress(change.position)
         change.consume()
       }
 
@@ -200,7 +205,7 @@ private suspend fun AwaitPointerEventScope.detectTextSelectionGesture(
 
   lastPointerInputChange = null
   doubleTap.consume()
-  onDown(secondDown.position)
+  onDown(thirdDown.position)
 
   val tripleTap = withTimeoutOrNull(longPressTimeout) {
     val thirdUp = waitForUpOrCancellation(

@@ -7,13 +7,13 @@ import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.magnifier
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -35,11 +36,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
-import kotlinx.coroutines.flow.collectLatest
 
 private val DefaultHandleColor = Color(0xFF0BB7EFL)
-
-// TODO: fix a bug where dragging a crossed handle will drag the opposite handle instead.
 
 @Composable
 fun SelectableTextContainer(
@@ -53,9 +51,17 @@ fun SelectableTextContainer(
   interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
   onClicked: (() -> Unit)? = null,
   onLongClicked: (() -> Unit)? = null,
+  toolbarColors: SelectableTextToolbarColors = SelectableTextToolbarDefaults.colors(),
+  toolbar: (SelectableTextToolbarScope.() -> Unit)? = null,
   textContent: @Composable (onTextLayout: (TextLayoutResult) -> Unit) -> Unit
 ) {
   val focusRequester = remember { FocusRequester() }
+  val hapticFeedback = LocalHapticFeedback.current
+
+  val onClickedUpdated by rememberUpdatedState(onClicked)
+  val onLongClickedUpdated by rememberUpdatedState(onLongClicked)
+
+  val toolbarItems = toolbar?.let { builder -> buildSelectableTextToolbarItems(builder) }.orEmpty()
 
   val selectionColor by selectableTextState.selectionColor
   val pointerPositionMut by selectableTextState.localPointerPosition
@@ -63,9 +69,14 @@ fun SelectableTextContainer(
   val dragModeMut by selectableTextState.dragMode
   val dragMode = dragModeMut
 
-  LaunchedEffect(key1 = selectableTextState) {
-    selectableTextState.focusEventFlow
-      .collectLatest { focusRequester.requestFocus() }
+  LaunchedEffect(key1 = selectableTextState, key2 = hapticFeedback) {
+    selectableTextState.uiEventFlow
+      .collect { uiEvent ->
+        when (uiEvent) {
+          SelectableTextState.UiEvent.RequestFocus -> focusRequester.requestFocus()
+          is SelectableTextState.UiEvent.PerformHapticFeedback -> hapticFeedback.performHapticFeedback(uiEvent.type)
+        }
+      }
   }
 
   val startHandlePainter = remember(cursorColor, startSelectionHandlePainter) {
@@ -102,15 +113,13 @@ fun SelectableTextContainer(
     modifier = modifier
       .then(
         Modifier
+          .onFocusChanged { focusState ->
+            if (!focusState.isFocused && selectableTextState.hasSelection) {
+              selectableTextState.resetEverything()
+            }
+          }
           .focusRequester(focusRequester)
           .focusable()
-          .onFocusChanged { focusState ->
-            // TODO: for some reason we lose focus when dragging selection handles sometimes.
-            //  Haven't figured out why yet so for now this is disabled.
-//            if (!focusState.isFocused) {
-//              selectableTextState.resetEverything()
-//            }
-          }
           .onGloballyPositioned { layoutCoordinates ->
             selectableTextState.updateSelectableTextLayoutCoordinates(layoutCoordinates)
           }
@@ -122,8 +131,8 @@ fun SelectableTextContainer(
             key1 = Unit,
             block = {
               textSelectionAfterDoubleTapOrTapWithLongTap(
-                onClicked = onClicked,
-                onLongClicked = onLongClicked,
+                onClicked = { onClickedUpdated?.invoke() },
+                onLongClicked = { onLongClickedUpdated?.invoke() },
                 interactionSource = interactionSource,
                 selectableTextState = selectableTextState
               )
@@ -138,7 +147,7 @@ fun SelectableTextContainer(
 
     Spacer(
       modifier = Modifier
-        .fillMaxSize()
+        .matchParentSize()
         .drawWithCache {
           onDrawWithContent {
             drawContent()
@@ -163,18 +172,28 @@ fun SelectableTextContainer(
         }
     )
 
+    if (toolbarItems.isNotEmpty() && dragMode != null && pointerPosition == null && selectableTextState.hasSelection) {
+      SelectableTextToolbar(
+        selectableTextState = selectableTextState,
+        items = toolbarItems,
+        colors = toolbarColors
+      )
+    }
+
     SelectionHandleElement(
       handleSize = handleSize,
       selectableTextState = selectableTextState,
-      selectionHandle = selectableTextState.startSelectionHandle,
-      handlePainter = startHandlePainter
+      selectionHandle = selectableTextState.leftSelectionHandle,
+      startHandlePainter = startHandlePainter,
+      endHandlePainter = endHandlePainter
     )
 
     SelectionHandleElement(
       handleSize = handleSize,
       selectableTextState = selectableTextState,
-      selectionHandle = selectableTextState.endSelectionHandle,
-      handlePainter = endHandlePainter
+      selectionHandle = selectableTextState.rightSelectionHandle,
+      startHandlePainter = startHandlePainter,
+      endHandlePainter = endHandlePainter
     )
   }
 }
@@ -184,9 +203,15 @@ private fun SelectionHandleElement(
   handleSize: Dp,
   selectableTextState: SelectableTextState,
   selectionHandle: SelectionHandle,
-  handlePainter: Painter
+  startHandlePainter: Painter,
+  endHandlePainter: Painter
 ) {
+  if (!selectionHandle.isInitialized) {
+    return
+  }
+
   val isStartHandle = selectableTextState.isStartHandle(selectionHandle)
+  val handlePainter = if (isStartHandle) startHandlePainter else endHandlePainter
 
   val popupPositionProvider = remember(isStartHandle, selectionHandle) {
     object : PopupPositionProvider {
@@ -210,7 +235,7 @@ private fun SelectionHandleElement(
         }
         _prevOffset = intOffset
 
-        val selectableTextLayoutCoordinates = selectionHandle.selectableTextLayoutCoordinates
+        val selectableTextLayoutCoordinates = selectableTextState.selectableTextLayoutCoordinates
         if (selectableTextLayoutCoordinates == null) {
           return IntOffset.Zero
         }
@@ -237,14 +262,10 @@ private fun SelectionHandleElement(
     Spacer(
       modifier = Modifier
         .onGloballyPositioned { layoutCoordinates ->
-          selectableTextState.updatePopupLayoutCoordinates(
-            isLeftHandle = isStartHandle,
-            layoutCoordinates = layoutCoordinates
-          )
+          selectionHandle.popupLayoutCoordinates = layoutCoordinates
         }
-        .pointerInput(isStartHandle, selectableTextState) {
+        .pointerInput(selectionHandle, selectableTextState) {
           textSelectionAfterHandleDrag(
-            isLeftHandle = isStartHandle,
             selectionHandle = selectionHandle,
             selectableTextState = selectableTextState
           )
@@ -253,12 +274,8 @@ private fun SelectionHandleElement(
           onDrawWithContent {
             drawContent()
 
-            if (!selectionHandle.isInitialized) {
-              return@onDrawWithContent
-            }
-
             with(handlePainter) {
-              draw(handlePainter.intrinsicSize)
+              draw(size)
             }
 
             if (selectableTextState.debugMode) {
